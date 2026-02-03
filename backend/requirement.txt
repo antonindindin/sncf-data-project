@@ -9,7 +9,6 @@ click
 colorama
 configobj
 cryptography
-cupshelpers
 dbus-python
 defer
 distro
