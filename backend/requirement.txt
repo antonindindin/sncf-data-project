@@ -3,7 +3,6 @@ Babel
 bcc
 bcrypt
 blinker
-Brlapi
 certifi
 chardet
 click
