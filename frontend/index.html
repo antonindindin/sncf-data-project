@@ -5,39 +5,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SNCF Data Project</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        .btn {
-            align-self: center;
-            padding: 8px 16px;
-            font-size: 0.9rem;
-        }
-    </style>
 </head>
 <body>
     <div class="container">
-        <h1><center>🚄 Projet SNCF Data</center></h1>
-        <div class="grid">
-            <div class="card">
-                <h3><center>Isochrone</center></h3>
-                <p><center>Temps de trajet</center></p>
-                <button class="btn">Voir</button>
+        <header class="main-header">
+            <div class="logo">SNCF DataHub</div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="#">Accueil</a></li>
+                    <li><a href="#">À Propos</a></li>
+                    <li><a href="#">Contact</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <div id="app-container"></div>
+            <div class="apps-grid">
+                <div class="app-card" onclick="">
+                    <span class="app-icon">🏛️</span>
+                    <h3>Gares & Villes</h3>
+                </div>
+                <div class="app-card" onclick="">
+                    <span class="app-icon">🛤️</span>
+                    <h3>Réseau Ferré</h3>
+                </div>
+                <div class="app-card" onclick="">
+                    <span class="app-icon">👥</span>
+                    <h3>Fréquentation</h3>
+                </div>
+                <div class="app-card" onclick="">
+                    <span class="app-icon">💶</span>
+                    <h3>Comparateur Tarifs</h3>
+                </div>
             </div>
-            <div class="card">
-                <h3><center>Comparateur Carbone</center></h3>
-                <p><center>Train vs Voiture</center></p>
-                <button class="btn">Voir</button>
-            </div>
-            <div class="card">
-                <h3><center>Heatmap des Retards</center></h3>
-                <p><center>Analyse de ponctualité</center></p>
-                <button class="btn">Voir</button>
-            </div>
-            <div class="card">
-                <h3><center>Accessibilité PMR</center></h3>
-                <p><center>Gares accessibles</center></p>
-                <button class="btn">Voir</button>
-            </div>
-        </div>
+            <div id="app-container"></div>
+        </main>
     </div>
+    <script async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap">
+    </script>
 </body>
 </html>
