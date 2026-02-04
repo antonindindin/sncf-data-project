@@ -1,0 +1,112 @@
+/* Palette de couleurs et variables SNCF */
+:root {
+    --sncf-blue: #004696;
+    --sncf-white: #ffffff;
+    --sncf-light-gray: #f5f5f5;
+    --sncf-dark-gray: #333333;
+    --sncf-border-radius: 12px;
+    --sncf-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Configuration globale et typographie sans-serif */
+body {
+    font-family: 'Segoe UI', 'Roboto', 'Avenir', sans-serif;
+    background-color: var(--sncf-light-gray);
+    color: var(--sncf-dark-gray);
+    margin: 0;
+    padding: 20px;
+    line-height: 1.6;
+}
+
+/* Conteneur principal */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Titre du tableau de bord */
+header {
+    margin-bottom: 30px;
+    border-bottom: 3px solid var(--sncf-blue);
+    padding-bottom: 10px;
+}
+
+header h1 {
+    color: var(--sncf-blue);
+    margin: 0;
+}
+
+/* Mise en page en grille : 1 colonne sur mobile, 2 sur tablette, 4 sur grand écran */
+.grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 25px;
+}
+
+@media (min-width: 600px) {
+    .grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
+    .grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* Style des cartes du dashboard */
+.card {
+    background-color: var(--sncf-white);
+    padding: 25px;
+    border-radius: var(--sncf-border-radius);
+    box-shadow: var(--sncf-shadow);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Effet de survol : la carte monte légèrement */
+.card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.15);
+}
+
+.card h2 {
+    color: var(--sncf-blue);
+    margin-top: 0;
+    font-size: 1.5rem;
+}
+
+/* Style des boutons attractifs */
+.btn {
+    display: inline-block;
+    padding: 12px 24px;
+    background-color: var(--sncf-blue);
+    color: var(--sncf-white);
+    border: none;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    align-self: flex-start;
+    margin-top: auto;
+}
+
+.btn:hover {
+    background-color: #003370; /* Bleu SNCF plus foncé au survol */
+}
+
+/* Section de données ou graphiques */
+.data-placeholder {
+    background: #e9ecef;
+    height: 150px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 15px 0;
+    color: #666;
+    font-style: italic;
+}
