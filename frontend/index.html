@@ -20,28 +20,31 @@
         </header>
 
         <main class="main-content">
-            <div id="app-container"></div>
             <div class="apps-grid">
-                <div class="app-card" onclick="">
+                <div class="app-card" onclick="loadApp('gares')">
                     <span class="app-icon">🏛️</span>
                     <h3>Gares & Villes</h3>
                 </div>
-                <div class="app-card" onclick="">
+                <div class="app-card" onclick="loadApp('reseau')">
                     <span class="app-icon">🛤️</span>
                     <h3>Réseau Ferré</h3>
                 </div>
-                <div class="app-card" onclick="">
+                <div class="app-card" onclick="loadApp('frequentation')">
                     <span class="app-icon">👥</span>
                     <h3>Fréquentation</h3>
                 </div>
-                <div class="app-card" onclick="">
+                <div class="app-card" onclick="loadApp('tarifs')">
                     <span class="app-icon">💶</span>
                     <h3>Comparateur Tarifs</h3>
                 </div>
             </div>
+
             <div id="app-container"></div>
         </main>
     </div>
+
+    <script src="script.js"></script>
+
     <script async
     src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap">
     </script>

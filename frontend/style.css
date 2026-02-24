@@ -178,3 +178,19 @@ header h1 {
     font-style: italic;
     margin-top: 20px; /* Espace au-dessus du conteneur d'application */
 }
+
+
+let map;
+
+function initMap() {
+    // ... votre code existant ...
+    const centreFrance = { lat: 46.603354, lng: 1.888334 };
+    map = new google.maps.Map(document.getElementById("app-container"), {
+        center: centreFrance,
+        zoom: 6,
+    });
+    // ...
+}
+
+// AJOUTEZ CECI À LA FIN DU FICHIER pour rendre la fonction accessible à l'API Google
+window.initMap = initMap;
