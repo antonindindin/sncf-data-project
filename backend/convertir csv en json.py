@@ -2,52 +2,62 @@ import pandas as pd
 import json
 import os
 
-print("Démarrage de la conversion CSV vers GeoJSON...")
+print("Démarrage de la conversion et du filtrage des gares...")
 
-# Définition des chemins de base (ajustez le chemin si nécessaire)
-# os.path.expanduser("~") remplace le "~" par "/home/votre_nom_utilisateur" (ou C:\Users\Nom sous Windows)
-dossier_projet = os.path.expanduser("~/Documents/sncf-data-project")
+dossier_projet = os.path.expanduser("~/Documents/sncf-data-project/data")
+fichier_entree = os.path.join(dossier_projet, "gares-de-voyageurs.csv")
+fichier_sortie = os.path.join(dossier_projet, "frontend", "gares.geojson")
 
-fichier_entree = os.path.join(dossier_projet, "lignes-lgv-et-par-ecartement.csv")
-fichier_sortie = os.path.join(dossier_projet, "frontend", "reseau.geojson") # J'ajoute /frontend/ pour qu'il aille au bon endroit
-
-# 1. Charger le CSV
 df = pd.read_csv(fichier_entree, sep=";")
-
 features = []
+gares_conservees = 0
 
-# 2. Parcourir chaque ligne pour extraire le tracé géographique
 for index, row in df.iterrows():
-    if pd.isna(row.get('Geo Shape')):
+    pos = str(row.get('Position géographique', ''))
+    segment = str(row.get('Segment(s) DRG', '')).strip()
+    
+    # FILTRE ANTI-LAG : On ignore les gares sans coordonnées ET les gares de catégorie C (locales)
+    if pd.isna(row.get('Position géographique')) or pos.strip() == '':
+        continue
+    if segment == 'C' or segment == 'a' or segment == 'c': # On ne garde que A et B
         continue
         
     try:
-        geo_shape = json.loads(row['Geo Shape'])
+        lat_str, lng_str = pos.split(',')
+        lat = float(lat_str.strip())
+        lng = float(lng_str.strip())
+        
+        geometry = {
+            "type": "Point",
+            "coordinates": [lng, lat]
+        }
+        
+        properties = row.to_dict()
+        for k, v in properties.items():
+            if pd.isna(v):
+                properties[k] = ""
+            else:
+                properties[k] = str(v)
         
         feature = {
             "type": "Feature",
-            "geometry": geo_shape,
-            "properties": {
-                "CODE_LIGNE": row.get('CODE_LIGNE', ''),
-                "LIB_LIGNE": str(row.get('LIB_LIGNE', '')),
-                "CATLIG": row.get('CATLIG', '')
-            }
+            "geometry": geometry,
+            "properties": properties
         }
         features.append(feature)
+        gares_conservees += 1
+        
     except Exception as e:
-        print(f"Erreur d'extraction à la ligne {index}: {e}")
+        pass
 
-# 4. Formater le tout selon le standard GeoJSON
 geojson = {
     "type": "FeatureCollection",
     "features": features
 }
 
-# 5. Sauvegarder le fichier
-# On s'assure que le dossier de destination existe, sinon on le crée
 os.makedirs(os.path.dirname(fichier_sortie), exist_ok=True)
-
 with open(fichier_sortie, "w", encoding="utf-8") as f:
     json.dump(geojson, f, ensure_ascii=False)
 
-print(f"Succès ! Fichier cartographique généré : {fichier_sortie}")
+print(f"Succès ! Fichier allégé généré : {fichier_sortie}_allégé")
+print(f"Nombre de gares conservées (Segments A et B) : {gares_conservees}")
