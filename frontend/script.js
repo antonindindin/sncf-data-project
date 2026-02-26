@@ -1,14 +1,30 @@
 let map; // Variable globale pour stocker la carte
+let reseauDataLoaded = false; // Nouveau : Pour savoir si le GeoJSON a déjà été chargé
+let reseauVisible = false;    // Nouveau : Pour savoir si le réseau est actuellement visible
 
-// Fonction pour charger et dessiner le réseau ferré
+// Fonction pour charger et dessiner le réseau ferré (maintenant gère aussi la visibilité)
 function loadLGVLines() {
-    console.log("Chargement du réseau ferré...");
+    // 1. Demander à Google Maps de charger le fichier que Python a généré, une seule fois
+    if (!reseauDataLoaded) {
+        console.log("Chargement initial du réseau ferré...");
+        map.data.loadGeoJson('reseau.geojson');
+        reseauDataLoaded = true; // Marquer le GeoJSON comme chargé
 
-    // 1. Demander à Google Maps de charger le fichier que Python a généré
-    map.data.loadGeoJson('reseau.geojson');
+        // 3. Optionnel : Ajouter une interactivité au clic sur une ligne (une seule fois)
+        map.data.addListener('click', function(event) {
+            let typeLigne = event.feature.getProperty('CATLIG');
+            let idLigne = event.feature.getProperty('LIB_LIGNE');
+            alert("Ligne n°" + idLigne + "\nType : " + typeLigne);
+        });
+    }
 
-    // 2. Appliquer un style (code couleur) selon le type de voie
+    // 2. Appliquer un style (code couleur) selon le type de voie, en tenant compte de la visibilité
     map.data.setStyle(function(feature) {
+        // Si le réseau ne doit pas être visible, masquer toutes les fonctionnalités
+        if (!reseauVisible) {
+            return { visible: false };
+        }
+
         // Récupérer la catégorie de la ligne (définie dans le script Python)
         let categorie = feature.getProperty('CATLIG');
         
@@ -27,26 +43,15 @@ function loadLGVLines() {
             epaisseur = 1.5;
             ordreSuperposition = 5;
         } 
-        else if (categorie === 'Ligne du réseau conventionnel à voie étroite') {
-            couleur = '#E84E0F'; // Orange pour les réseaux locaux/montagne
-            epaisseur = 1.5;
-            ordreSuperposition = 5;
-        }
 
         // Retourner les instructions de dessin à la carte
         return {
             strokeColor: couleur,
             strokeWeight: epaisseur,
             strokeOpacity: 0.8,
-            zIndex: ordreSuperposition
+            zIndex: ordreSuperposition,
+            visible: true // Rendre visible si reseauVisible est vrai
         };
-    });
-
-    // 3. Optionnel : Ajouter une interactivité au clic sur une ligne
-    map.data.addListener('click', function(event) {
-        let typeLigne = event.feature.getProperty('CATLIG');
-        let idLigne = event.feature.getProperty('LIB_LIGNE');
-        alert("Ligne n°" + idLigne + "\nType : " + typeLigne);
     });
 }
 
@@ -82,18 +87,28 @@ function initMap() {
         disableDefaultUI: true, // Cette commande nucléaire désactive TOUT (Satellite, Street View, etc.)
         zoomControl: true,      // Mais on réactive manuellement les boutons + et -
     });
-    loadLGVLines(); // Appel de la fonction pour charger les lignes LGV après l'initialisation de la carte
+    // Suppression de l'appel direct à loadLGVLines() ici.
+    // Le réseau ferré ne se chargera plus automatiquement au démarrage.
 }
 
 function loadApp(appName) {
     console.log("Lancement du module : " + appName);
     
+    // Assurez-vous que la carte est initialisée si elle ne l'est pas
+    if (!map) {
+        initMap(); 
+    }
+
     if (appName === 'gares') {
-        if (!map) {
-            initMap(); 
-        } else {
-            map.setZoom(6);
+        // Si le réseau ferré était visible, le masquer lors du passage à une autre application
+        if (reseauVisible) {
+            reseauVisible = false; // Mettre à jour l'état de visibilité
+            loadLGVLines();        // Ré-appliquer le style pour cacher le réseau
         }
+        map.setZoom(6); // Exemple : Réinitialiser le zoom pour l'application "Gares"
+    } else if (appName === 'reseau') {
+        reseauVisible = !reseauVisible; // Basculer l'état de visibilité (afficher/masquer)
+        loadLGVLines();                 // Charger les données (si pas déjà fait) et ré-appliquer le style en fonction du nouvel état
     }
 }
 
