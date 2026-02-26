@@ -2,43 +2,37 @@ let map; // Variable globale pour stocker la carte
 
 // Fonction appelée automatiquement par Google Maps quand le script est chargé
 function initMap() {
-    // Coordonnées du centre de la France (environ)
+    // 1. Coordonnées du centre de la France
     const centreFrance = { lat: 46.603354, lng: 1.888334 };
 
-    // Définition des limites de la France métropolitaine
+    // 2. On définit la "boîte" invisible qui bloque la caméra autour de la France
     const limitesFrance = {
-        north: 51.5,
-        south: 41.0,
-        west: -5.5,
-        east: 9.5,
+        north: 51.5, // Frontière Nord
+        south: 41.0, // Sud (Corse incluse)
+        west: -5.5,  // Ouest (Bretagne)
+        east: 9.5,   // Est (Alsace/Alpes)
     };
 
-    // Création de la carte
+    // 3. Création et configuration de la carte
     map = new google.maps.Map(document.getElementById("app-container"), {
         center: centreFrance,
-        zoom: 6,
-        minZoom: 5,
-        mapId: 'def9248b61a9c229f43789e9',
+        zoom: 6, // Zoom initial
+        minZoom: 5, // Empêche l'utilisateur de trop dézoomer pour voir la Terre entière
         
-        // Restriction géographique
+        // ⚠️ TRÈS IMPORTANT : Mets ton vrai Map ID ici pour charger tes couleurs
+        mapId: 'def9248b61a9c229f43789e9', 
+        
+        // 4. On applique le mur invisible (Restriction)
         restriction: {
             latLngBounds: limitesFrance,
             strictBounds: false,
         },
 
-        // UI minimaliste
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
-        zoomControl: true,
+        // 5. Nettoyage de l'interface (UI)
+        disableDefaultUI: true, // Cette commande nucléaire désactive TOUT (Satellite, Street View, etc.)
+        zoomControl: true,      // Mais on réactive manuellement les boutons + et -
     });
-
-    // Ajouter un marqueur sur Paris (Gare de Lyon)
-    new google.maps.Marker({
-        position: { lat: 48.8443, lng: 2.3744 },
-        map: map,
-        title: "Gare de Lyon",
-    });
+    loadLGVLines();
 }
 
 function loadApp(appName) {
@@ -54,4 +48,3 @@ function loadApp(appName) {
 }
 
 window.initMap = initMap;
-
