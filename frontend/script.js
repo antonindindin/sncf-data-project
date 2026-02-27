@@ -1,155 +1,166 @@
 // Variables globales
 let map; 
 
-// === RESEAU FERRE ===
-let reseauData; // On déclare la variable ici, on l'initialise plus tard
+// === RESEAU FERRE (Lignes) ===
+let reseauData; 
 let reseauDataLoaded = false; 
 let reseauVisible = false;    
 
-// === GARES ET VILLES ===
-let garesData;   
+// === GARES ET VILLES (Points ultra-optimisés) ===
+let toutesLesGares = [];      // Va stocker les données brutes
+let marqueursAffiches = [];   // Va stocker les gares actuellement dessinées à l'écran
 let garesDataLoaded = false;
 let garesVisible = false;
 
-// Fonction pour charger et dessiner le réseau ferré
+// 1. Fonction pour le réseau ferré (On garde le système natif, très bon pour les lignes)
 function loadLGVLines() {
     if (!reseauDataLoaded) {
-        console.log("Chargement initial du réseau ferré...");
         reseauData.loadGeoJson('reseau.geojson'); 
         reseauDataLoaded = true; 
 
         reseauData.addListener('click', function(event) { 
-            let typeLigne = event.feature.getProperty('CATLIG');
-            let idLigne = event.feature.getProperty('LIB_LIGNE');
-            alert("Ligne n°" + idLigne + "\nType : " + typeLigne);
+            alert("Ligne n°" + event.feature.getProperty('LIB_LIGNE') + "\nType : " + event.feature.getProperty('CATLIG'));
         });
     }
 
-    // Appliquer le style et la visibilité
     reseauData.setStyle(function(feature) { 
-        if (!reseauVisible) {
-            return { visible: false };
-        }
-
-        let categorie = feature.getProperty('CATLIG');
-        let couleur = '#888888'; 
-        let epaisseur = 2;
-        let ordreSuperposition = 1;
-
-        if (categorie === 'Ligne à grande vitesse') {
-            couleur = '#0055A4'; 
-            epaisseur = 4;       
-            ordreSuperposition = 10; 
-        } 
-        else if (categorie === 'Ligne du réseau conventionnel à écartement normal') {
-            couleur = '#0088CE'; 
-            epaisseur = 1.5;
-            ordreSuperposition = 5;
-        } 
-
+        if (!reseauVisible) return { visible: false };
+        let estLGV = (feature.getProperty('CATLIG') === 'Ligne à grande vitesse');
         return {
-            strokeColor: couleur,
-            strokeWeight: epaisseur,
+            strokeColor: estLGV ? '#0055A4' : '#0088CE',
+            strokeWeight: estLGV ? 4 : 1.5,
             strokeOpacity: 0.8,
-            zIndex: ordreSuperposition,
+            zIndex: estLGV ? 10 : 5,
             visible: true
         };
     });
 }
 
-// Fonction pour charger et dessiner les gares
-function loadGares() {
+// 2. Fonction de téléchargement des gares
+async function loadGares() {
     if (!garesDataLoaded) {
-        console.log("Chargement initial des gares...");
-        garesData.loadGeoJson('gares.geojson'); 
-        garesDataLoaded = true;
+        console.log("Téléchargement des données des gares...");
+        try {
+            const reponse = await fetch('gares.geojson');
+            const data = await reponse.json();
+            toutesLesGares = data.features; // On sauvegarde tout en mémoire, sans rien dessiner
+            garesDataLoaded = true;
+        } catch (erreur) {
+            console.error("Erreur de chargement :", erreur);
+            return;
+        }
+    }
+    // Une fois téléchargé, on actualise ce qu'on doit voir
+    actualiserAffichageGares();
+}
 
-        garesData.addListener('click', function(event) { 
-            if (event.feature.getGeometry().getType() === 'Point') { 
-                // La colonne dans le CSV s'appelle 'Nom'
-                let nomGare = event.feature.getProperty('Nom');
-                let uic = event.feature.getProperty('Code(s) UIC');
-                alert("Gare : " + nomGare + "\nCode UIC : " + uic);
-            }
-        });
+// 3. LA FONCTION MAGIQUE (Viewport Culling + Filtre de zoom)
+function actualiserAffichageGares() {
+    // Si le module n'est pas actif, on nettoie l'écran et on s'arrête
+    if (!garesVisible) {
+        marqueursAffiches.forEach(m => m.setMap(null));
+        marqueursAffiches = [];
+        return;
     }
 
-    garesData.setStyle(function(feature) { 
-        if (!garesVisible) {
-            return { visible: false };
-        }
-        
-        if (feature.getGeometry().getType() === 'Point') {
-            // On peut adapter la taille selon que ce soit une très grande gare (A) ou régionale (B)
-            let segment = feature.getProperty('Segment(s) DRG');
-            let taillePoint = (segment === 'A') ? 6 : 4; // Plus gros pour les gares nationales
-            let couleurPoint = (segment === 'A') ? '#E84E0F' : '#FFB612'; // Orange SNCF pour A, Jaune pour B
+    let currentZoom = map.getZoom();
+    let limitesEcran = map.getBounds(); // Récupère le rectangle de l'écran (Nord/Sud/Est/Ouest)
 
-            return {
-                icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: taillePoint, 
-                    fillColor: couleurPoint, 
-                    fillOpacity: 1,
-                    strokeColor: '#FFFFFF', // Contour blanc pour bien détacher de la carte
-                    strokeWeight: 1.5
-                },
-                visible: true 
-            };
-        }
-        return { visible: false }; 
+    if (!limitesEcran) return; // Sécurité si la carte n'est pas encore prête
+
+    // On efface les anciens marqueurs
+    marqueursAffiches.forEach(m => m.setMap(null));
+    marqueursAffiches = [];
+
+    // On parcourt nos 3000 gares stockées en mémoire
+    toutesLesGares.forEach(feature => {
+        let coords = feature.geometry.coordinates;
+        let props = feature.properties;
+        let segment = props['Segment(s) DRG'];
+        
+        // On crée un objet "Position" compréhensible par Google Maps
+        let position = new google.maps.LatLng(coords[1], coords[0]); 
+
+        // === FILTRE 1 : LA GARE EST-ELLE DANS L'ÉCRAN ? ===
+        // Si elle est hors de l'écran, on passe à la suivante immédiatement
+        if (!limitesEcran.contains(position)) return;
+
+        // === FILTRE 2 : NIVEAU DE ZOOM ===
+        // Zoom < 8 : On ne garde que les gares majeures (A)
+        if (currentZoom < 8 && segment !== 'A') return;
+        // Zoom < 11 : On garde les A et les B
+        if (currentZoom < 11 && segment === 'C') return;
+
+        // Si on arrive ici, c'est que la gare est DANS l'écran et qu'on a le BON ZOOM.
+        // On la dessine !
+        let taillePoint = (segment === 'A') ? 5 : (segment === 'B' ? 4 : 3); 
+        // Correction de la syntaxe de l'opérateur ternaire pour la couleur
+        let couleurPoint = (segment === 'A') ? '#0055A4' : (segment === 'B' ? '#0088CE' : '#0022ce');
+
+        let marker = new google.maps.Marker({
+            position: position,
+            map: map,
+            title: props['Nom'],
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: taillePoint,
+                fillColor: couleurPoint,
+                fillOpacity: 0.9,
+                strokeColor: '#FFFFFF',
+                strokeWeight: 1
+            }
+        });
+
+        marker.addListener('click', () => {
+            alert("Gare : " + props['Nom'] + "\nCode UIC : " + props['Code(s) UIC']);
+        });
+
+        marqueursAffiches.push(marker); // On la garde en mémoire pour pouvoir l'effacer plus tard
     });
 }
 
-// Fonction appelée par Google Maps
+// 4. Initialisation de la carte
 function initMap() {
-    const centreFrance = { lat: 46.603354, lng: 1.888334 };
-    const limitesFrance = {
-        north: 51.5, south: 41.0, west: -5.5, east: 9.5, 
-    };
-
     map = new google.maps.Map(document.getElementById("app-container"), {
-        center: centreFrance,
+        center: { lat: 46.603354, lng: 1.888334 },
         zoom: 6, 
         minZoom: 5, 
         mapId: 'def9248b61a9c229f43789e9', 
-        restriction: { latLngBounds: limitesFrance, strictBounds: false },
+        restriction: { latLngBounds: { north: 51.5, south: 41.0, west: -5.5, east: 9.5 }, strictBounds: false },
         disableDefaultUI: true, 
         zoomControl: true,      
     });
 
-    // === NOUVEAU : C'EST ICI QU'IL FAUT CRÉER LES CALQUES ===
-    // À ce stade, on est sûr que l'API Google Maps est chargée !
     reseauData = new google.maps.Data();
-    garesData = new google.maps.Data();
-
     reseauData.setMap(map);
-    garesData.setMap(map);
+
+    // === L'ASTUCE ANTI-LAG EST ICI ===
+    // "idle" se déclenche UNIQUEMENT quand l'utilisateur a FINI de bouger ou zoomer.
+    // Cela évite de calculer 60 fois par seconde pendant un mouvement.
+    map.addListener('idle', function() {
+        if (garesVisible) {
+            actualiserAffichageGares();
+        }
+    });
 }
 
-// Gestion des clics sur les boutons du menu
+// 5. Gestion des clics sur le menu
 function loadApp(appName) {
-    console.log("Lancement du module : " + appName);
-    
     if (!map) initMap(); 
 
     if (appName === 'gares') {
-        // On active les gares et on désactive le réseau
         reseauVisible = false;
         garesVisible = true; 
-        
-        loadLGVLines(); // Met à jour le style (masque)
-        loadGares();    // Met à jour le style (affiche)
-        map.setZoom(6); 
+        loadLGVLines(); // Cache les lignes
+        loadGares();    // Lance notre super logique d'affichage
     } 
     else if (appName === 'reseau') {
-        // On active le réseau et on désactive les gares
         garesVisible = false;
         reseauVisible = true; 
-        
-        loadGares();    // Met à jour le style (masque)
-        loadLGVLines(); // Met à jour le style (affiche)
+        actualiserAffichageGares(); // Va nettoyer l'écran des gares
+        loadLGVLines(); // Affiche les lignes
     }
 }
 
 window.initMap = initMap;
+window.loadApp = loadApp;
