@@ -27,7 +27,7 @@ function loadLGVLines() {
         if (!reseauVisible) return { visible: false };
         let estLGV = (feature.getProperty('CATLIG') === 'Ligne à grande vitesse');
         return {
-            strokeColor: estLGV ? '#0055A4' : '#0088CE',
+            strokeColor: estLGV ? '#E20074' : '#0055A4',
             strokeWeight: estLGV ? 4 : 1.5,
             strokeOpacity: 0.8,
             zIndex: estLGV ? 10 : 5,
@@ -93,9 +93,8 @@ function actualiserAffichageGares() {
 
         // Si on arrive ici, c'est que la gare est DANS l'écran et qu'on a le BON ZOOM.
         // On la dessine !
-        let taillePoint = (segment === 'A') ? 5 : (segment === 'B' ? 4 : 3); 
-        // Correction de la syntaxe de l'opérateur ternaire pour la couleur
-        let couleurPoint = (segment === 'A') ? '#0055A4' : (segment === 'B' ? '#0088CE' : '#0022ce');
+        let taillePoint = (segment === 'A') ? 9 : (segment === 'B' ? 7 : 5);        // Correction de la syntaxe de l'opérateur ternaire pour la couleur
+        let couleurPoint = (segment === 'A') ? '#E20074' : (segment === 'B' ? '#0088CE' : '#6C757D');
 
         let marker = new google.maps.Marker({
             position: position,
@@ -144,21 +143,28 @@ function initMap() {
     });
 }
 
-// 5. Gestion des clics sur le menu
+// 5. Gestion des clics sur le menu (Boutons indépendants On/Off)
 function loadApp(appName) {
     if (!map) initMap(); 
 
     if (appName === 'gares') {
-        reseauVisible = false;
-        garesVisible = true; 
-        loadLGVLines(); // Cache les lignes
-        loadGares();    // Lance notre super logique d'affichage
+        // 1. On inverse l'état (si c'était caché, ça s'affiche. Si c'était affiché, ça se cache)
+        garesVisible = !garesVisible; 
+        
+        // 2. On charge les données si ce n'est pas encore fait
+        if (!garesDataLoaded && garesVisible) {
+            loadGares();    
+        } else {
+            // Sinon, on met juste à jour l'écran
+            actualiserAffichageGares(); 
+        }
     } 
     else if (appName === 'reseau') {
-        garesVisible = false;
-        reseauVisible = true; 
-        actualiserAffichageGares(); // Va nettoyer l'écran des gares
-        loadLGVLines(); // Affiche les lignes
+        // 1. On inverse l'état du réseau
+        reseauVisible = !reseauVisible; 
+        
+        // 2. On relance la fonction qui va télécharger (si besoin) et appliquer le style/masque
+        loadLGVLines(); 
     }
 }
 
