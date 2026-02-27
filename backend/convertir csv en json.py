@@ -1,63 +1,71 @@
-import pandas as pd
+import csv
 import json
-import os
 
-print("Démarrage de la conversion et du filtrage des gares...")
+# Chemins de tes fichiers (adapte les chemins si besoin selon tes dossiers)
+fichier_frequentation = '/home/antonin/Documents/sncf-data-project/data/frequentation-gares.csv' # Ou le chemin exact de ton CSV
+fichier_geojson = '/home/antonin/Documents/sncf-data-project/frontend/gares.geojson'
+fichier_sortie_js = '/home/antonin/Documents/sncf-data-project/frontend/frequentation.js'
 
-dossier_projet = os.path.expanduser("~/Documents/sncf-data-project/data")
-fichier_entree = os.path.join(dossier_projet, "gares-de-voyageurs.csv")
-fichier_sortie = os.path.join(dossier_projet, "frontend", "gares.geojson")
+# 1. Lire le CSV et calculer la moyenne
+dictionnaire_frequentation = {}
+annees = [str(annee) for annee in range(2015, 2025)] # De 2015 à 2024
 
-df = pd.read_csv(fichier_entree, sep=";")
-features = []
-gares_conservees = 0
-
-for index, row in df.iterrows():
-    pos = str(row.get('Position géographique', ''))
-    segment = str(row.get('Segment(s) DRG', '')).strip()
+print("1. Analyse du fichier de fréquentation...")
+with open(fichier_frequentation, mode='r', encoding='utf-8') as f:
+    lecteur = csv.DictReader(f, delimiter=';')
     
-    # FILTRE ANTI-LAG : On ignore les gares sans coordonnées ET les gares de catégorie C (locales)
-    if pd.isna(row.get('Position géographique')) or pos.strip() == '':
-        continue
-    if segment == 'C' or segment == 'a' or segment == 'c': # On ne garde que A et B
-        continue
+    for ligne in lecteur:
+        code_uic = ligne.get('Code UIC', '').strip()
         
-    try:
-        lat_str, lng_str = pos.split(',')
-        lat = float(lat_str.strip())
-        lng = float(lng_str.strip())
+        # On calcule la moyenne des voyageurs pour cette gare
+        total_voyageurs = 0
+        nb_annees_valides = 0
         
-        geometry = {
-            "type": "Point",
-            "coordinates": [lng, lat]
-        }
+        for annee in annees:
+            colonne = f"Total Voyageurs {annee}"
+            if colonne in ligne and ligne[colonne].strip():
+                try:
+                    total_voyageurs += float(ligne[colonne])
+                    nb_annees_valides += 1
+                except ValueError:
+                    pass
         
-        properties = row.to_dict()
-        for k, v in properties.items():
-            if pd.isna(v):
-                properties[k] = ""
-            else:
-                properties[k] = str(v)
-        
-        feature = {
-            "type": "Feature",
-            "geometry": geometry,
-            "properties": properties
-        }
-        features.append(feature)
-        gares_conservees += 1
-        
-    except Exception as e:
-        pass
+        if nb_annees_valides > 0 and code_uic:
+            moyenne = total_voyageurs / nb_annees_valides
+            dictionnaire_frequentation[code_uic] = moyenne
 
-geojson = {
-    "type": "FeatureCollection",
-    "features": features
-}
+print(f"-> {len(dictionnaire_frequentation)} gares analysées avec succès.")
 
-os.makedirs(os.path.dirname(fichier_sortie), exist_ok=True)
-with open(fichier_sortie, "w", encoding="utf-8") as f:
-    json.dump(geojson, f, ensure_ascii=False)
+# 2. Lire le GeoJSON et croiser les données
+print("2. Croisement avec les coordonnées GPS...")
+donnees_heatmap = []
 
-print(f"Succès ! Fichier allégé généré : {fichier_sortie}_allégé")
-print(f"Nombre de gares conservées (Segments A et B) : {gares_conservees}")
+with open(fichier_geojson, mode='r', encoding='utf-8') as f:
+    geojson_data = json.load(f)
+    
+    for feature in geojson_data['features']:
+        # Le nom exact de la propriété dépend de ton GeoJSON, on prend les plus courants
+        props = feature.get('properties', {})
+        code_uic_geo = str(props.get('Code(s) UIC', props.get('code_uic', ''))).strip()
+        
+        # Si on trouve la fréquentation correspondante à ce code
+        if code_uic_geo in dictionnaire_frequentation:
+            coords = feature['geometry']['coordinates']
+            
+            # On ajoute le point (Attention : GeoJSON = [Longitude, Latitude])
+            donnees_heatmap.append({
+                "lat": coords[1],
+                "lng": coords[0],
+                "poids": dictionnaire_frequentation[code_uic_geo]
+            })
+
+print(f"-> {len(donnees_heatmap)} gares géolocalisées avec leur fréquentation.")
+
+# 3. Créer le fichier JavaScript final
+print("3. Création du fichier JS...")
+with open(fichier_sortie_js, mode='w', encoding='utf-8') as f:
+    f.write("const frequentationData = ")
+    json.dump(donnees_heatmap, f)
+    f.write(";")
+
+print(f"✅ Terminé ! Le fichier {fichier_sortie_js} est prêt à être utilisé.")

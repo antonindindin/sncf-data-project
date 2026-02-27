@@ -7,12 +7,16 @@ let reseauDataLoaded = false;
 let reseauVisible = false;    
 
 // === GARES ET VILLES (Points ultra-optimisés) ===
-let toutesLesGares = [];      // Va stocker les données brutes
-let marqueursAffiches = [];   // Va stocker les gares actuellement dessinées à l'écran
+let toutesLesGares = [];      
+let marqueursAffiches = [];   
 let garesDataLoaded = false;
 let garesVisible = false;
 
-// 1. Fonction pour le réseau ferré (On garde le système natif, très bon pour les lignes)
+// === FREQUENTATION (Heatmap) ===
+let heatmap = null;
+let frequentationVisible = false;
+
+// 1. Fonction pour le réseau ferré
 function loadLGVLines() {
     if (!reseauDataLoaded) {
         reseauData.loadGeoJson('reseau.geojson'); 
@@ -43,20 +47,18 @@ async function loadGares() {
         try {
             const reponse = await fetch('gares.geojson');
             const data = await reponse.json();
-            toutesLesGares = data.features; // On sauvegarde tout en mémoire, sans rien dessiner
+            toutesLesGares = data.features; 
             garesDataLoaded = true;
         } catch (erreur) {
             console.error("Erreur de chargement :", erreur);
             return;
         }
     }
-    // Une fois téléchargé, on actualise ce qu'on doit voir
     actualiserAffichageGares();
 }
 
 // 3. LA FONCTION MAGIQUE (Viewport Culling + Filtre de zoom)
 function actualiserAffichageGares() {
-    // Si le module n'est pas actif, on nettoie l'écran et on s'arrête
     if (!garesVisible) {
         marqueursAffiches.forEach(m => m.setMap(null));
         marqueursAffiches = [];
@@ -64,36 +66,26 @@ function actualiserAffichageGares() {
     }
 
     let currentZoom = map.getZoom();
-    let limitesEcran = map.getBounds(); // Récupère le rectangle de l'écran (Nord/Sud/Est/Ouest)
+    let limitesEcran = map.getBounds(); 
 
-    if (!limitesEcran) return; // Sécurité si la carte n'est pas encore prête
+    if (!limitesEcran) return; 
 
-    // On efface les anciens marqueurs
     marqueursAffiches.forEach(m => m.setMap(null));
     marqueursAffiches = [];
 
-    // On parcourt nos 3000 gares stockées en mémoire
     toutesLesGares.forEach(feature => {
         let coords = feature.geometry.coordinates;
         let props = feature.properties;
         let segment = props['Segment(s) DRG'];
         
-        // On crée un objet "Position" compréhensible par Google Maps
         let position = new google.maps.LatLng(coords[1], coords[0]); 
 
-        // === FILTRE 1 : LA GARE EST-ELLE DANS L'ÉCRAN ? ===
-        // Si elle est hors de l'écran, on passe à la suivante immédiatement
         if (!limitesEcran.contains(position)) return;
 
-        // === FILTRE 2 : NIVEAU DE ZOOM ===
-        // Zoom < 8 : On ne garde que les gares majeures (A)
         if (currentZoom < 8 && segment !== 'A') return;
-        // Zoom < 11 : On garde les A et les B
         if (currentZoom < 11 && segment === 'C') return;
 
-        // Si on arrive ici, c'est que la gare est DANS l'écran et qu'on a le BON ZOOM.
-        // On la dessine !
-        let taillePoint = (segment === 'A') ? 9 : (segment === 'B' ? 7 : 5);        // Correction de la syntaxe de l'opérateur ternaire pour la couleur
+        let taillePoint = (segment === 'A') ? 9 : (segment === 'B' ? 7 : 5);        
         let couleurPoint = (segment === 'A') ? '#E20074' : (segment === 'B' ? '#0088CE' : '#6C757D');
 
         let marker = new google.maps.Marker({
@@ -114,11 +106,73 @@ function actualiserAffichageGares() {
             alert("Gare : " + props['Nom'] + "\nCode UIC : " + props['Code(s) UIC']);
         });
 
-        marqueursAffiches.push(marker); // On la garde en mémoire pour pouvoir l'effacer plus tard
+        marqueursAffiches.push(marker); 
     });
 }
 
-// 4. Initialisation de la carte
+// 4. Fonction pour charger la carte de chaleur (Fréquentation)
+function loadFrequentation() {
+    // Si la heatmap n'est pas encore créée
+    if (!heatmap) {
+        console.log("Création de la Heatmap...");
+        
+        // On vérifie que les données sont bien là
+        if (typeof frequentationData === 'undefined') {
+            console.error("Fichier frequentation.js manquant ou mal chargé.");
+            return;
+        }
+
+        // On formate les données pour l'API Google
+        let heatmapData = frequentationData.map(point => {
+            return {
+                location: new google.maps.LatLng(point.lat, point.lng),
+                weight: point.poids
+            };
+        });
+
+        
+        // On crée la couche visuelle avec des paramètres pour un rendu DIFFUS
+        heatmap = new google.maps.visualization.HeatmapLayer({
+            data: heatmapData,
+            
+            // --- CHANGEMENT 1 : LE RAYON ---
+            // Passe de 25 à 80 (ou même 100 ou 120 selon tes goûts).
+            // Plus c'est grand, plus les points se mélangent en une nappe floue.
+            radius: 30,       
+
+            // --- CHANGEMENT 2 : L'OPACITÉ ---
+            // Un peu plus transparent pour un effet plus "vaporeux".
+            opacity: 0.7,     
+
+            // --- CHANGEMENT 3 : LE PLAFOND D'INTENSITÉ (CRUCIAL) ---
+            // On DÉCOMMENTE cette ligne.
+            // On fixe le "maximum rouge" à 5 millions (moyenne sur 10 ans).
+            // Ainsi, Paris sera rouge, mais Lyon, Bordeaux, Lille le seront aussi,
+            // créant des zones de chaleur régionales au lieu d'un seul point à Paris.
+            maxIntensity: 5000000, 
+
+            gradient: [
+                'rgba(0, 0, 255, 0)',     // Transparent
+                'rgba(65, 105, 225, 1)',  // Bleu froid
+                'rgba(0, 255, 255, 1)',   // Cyan
+                'rgba(0, 255, 0, 1)',     // Vert
+                'rgba(255, 255, 0, 1)',   // Jaune
+                'rgba(255, 165, 0, 1)',   // Orange
+                'rgba(255, 0, 0, 1)'      // Rouge chaud
+            ]
+        });
+    }
+// ... fin de la fonction ...
+
+    // On l'affiche ou on la cache en fonction de l'interrupteur
+    if (frequentationVisible) {
+        heatmap.setMap(map);
+    } else {
+        heatmap.setMap(null);
+    }
+}
+
+// 5. Initialisation de la carte
 function initMap() {
     map = new google.maps.Map(document.getElementById("app-container"), {
         center: { lat: 46.603354, lng: 1.888334 },
@@ -133,9 +187,6 @@ function initMap() {
     reseauData = new google.maps.Data();
     reseauData.setMap(map);
 
-    // === L'ASTUCE ANTI-LAG EST ICI ===
-    // "idle" se déclenche UNIQUEMENT quand l'utilisateur a FINI de bouger ou zoomer.
-    // Cela évite de calculer 60 fois par seconde pendant un mouvement.
     map.addListener('idle', function() {
         if (garesVisible) {
             actualiserAffichageGares();
@@ -143,28 +194,26 @@ function initMap() {
     });
 }
 
-// 5. Gestion des clics sur le menu (Boutons indépendants On/Off)
+// 6. Gestion des clics sur le menu (Boutons indépendants On/Off)
 function loadApp(appName) {
     if (!map) initMap(); 
 
     if (appName === 'gares') {
-        // 1. On inverse l'état (si c'était caché, ça s'affiche. Si c'était affiché, ça se cache)
         garesVisible = !garesVisible; 
-        
-        // 2. On charge les données si ce n'est pas encore fait
         if (!garesDataLoaded && garesVisible) {
             loadGares();    
         } else {
-            // Sinon, on met juste à jour l'écran
             actualiserAffichageGares(); 
         }
     } 
     else if (appName === 'reseau') {
-        // 1. On inverse l'état du réseau
         reseauVisible = !reseauVisible; 
-        
-        // 2. On relance la fonction qui va télécharger (si besoin) et appliquer le style/masque
         loadLGVLines(); 
+    }
+    // NOUVEAU MODULE : FRÉQUENTATION
+    else if (appName === 'frequentation') {
+        frequentationVisible = !frequentationVisible; 
+        loadFrequentation(); 
     }
 }
 
