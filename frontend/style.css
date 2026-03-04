@@ -194,3 +194,47 @@ function initMap() {
 
 // AJOUTEZ CECI À LA FIN DU FICHIER pour rendre la fonction accessible à l'API Google
 window.initMap = initMap;
+
+
+
+/* === BOUTONS ACTIFS === */
+.app-card.active {
+    border: 2px solid var(--sncf-blue);
+    background-color: #eaf1fa; /* Un fond bleu très très clair */
+    box-shadow: inset 0 0 0 1px var(--sncf-blue), 0 8px 15px rgba(0, 70, 150, 0.2);
+    transform: translateY(-4px); /* Il reste un peu surélevé pour montrer qu'il est cliqué */
+}
+
+/* === LÉGENDE DE LA CARTE === */
+.map-legend {
+    background: white;
+    padding: 15px;
+    margin: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 13px;
+    line-height: 1.8;
+    color: #333;
+    /* Cachée par défaut avant que Google Maps ne la place */
+    display: none;
+}
+
+.map-legend h4 {
+    margin: 0 0 10px 0;
+    color: var(--sncf-blue);
+    font-size: 15px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 5px;
+}
+
+/* Les petits ronds et traits de la légende */
+.legend-item { display: flex; align-items: center; }
+.legend-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    display: inline-block; margin-right: 8px;
+}
+.legend-line {
+    width: 16px; height: 4px;
+    display: inline-block; margin-right: 8px;
+}

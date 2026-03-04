@@ -1,5 +1,6 @@
 // Variables globales
 let map; 
+let infoWindow; // <-- NOUVEAU : La bulle d'information
 
 // === RESEAU FERRE (Lignes) ===
 let reseauData; 
@@ -23,7 +24,20 @@ function loadLGVLines() {
         reseauDataLoaded = true; 
 
         reseauData.addListener('click', function(event) { 
-            alert("Ligne n°" + event.feature.getProperty('LIB_LIGNE') + "\nType : " + event.feature.getProperty('CATLIG'));
+            let typeLigne = event.feature.getProperty('CATLIG');
+            let idLigne = event.feature.getProperty('LIB_LIGNE');
+            
+            // On crée le HTML de la bulle
+            let contenuBulle = `
+                <div style="color: #333; font-family: sans-serif; padding: 5px;">
+                    <h3 style="margin: 0 0 5px 0; color: #004696; font-size: 16px;">Ligne ${idLigne}</h3>
+                    <p style="margin: 0; font-size: 14px;"><strong>Type:</strong> ${typeLigne}</p>
+                </div>
+            `;
+            // On met le texte, on la place à l'endroit du clic, et on l'ouvre
+            infoWindow.setContent(contenuBulle);
+            infoWindow.setPosition(event.latLng);
+            infoWindow.open(map);
         });
     }
 
@@ -103,9 +117,16 @@ function actualiserAffichageGares() {
         });
 
         marker.addListener('click', () => {
-            alert("Gare : " + props['Nom'] + "\nCode UIC : " + props['Code(s) UIC']);
+            let contenuBulle = `
+                <div style="color: #333; font-family: sans-serif; padding: 5px; min-width: 150px;">
+                    <h3 style="margin: 0 0 5px 0; color: ${couleurPoint}; font-size: 16px;">${props['Nom']}</h3>
+                    <p style="margin: 0; font-size: 14px;"><strong>Code UIC:</strong> ${props['Code(s) UIC']}</p>
+                    <p style="margin: 0; font-size: 12px; color: #666;">Catégorie: ${segment}</p>
+                </div>
+            `;
+            infoWindow.setContent(contenuBulle);
+            infoWindow.open(map, marker); 
         });
-
         marqueursAffiches.push(marker); 
     });
 }
@@ -187,19 +208,37 @@ function initMap() {
     reseauData = new google.maps.Data();
     reseauData.setMap(map);
 
+    infoWindow = new google.maps.InfoWindow(); // Création de la bulle vide
+
+    // On récupère la légende dans le HTML et on la place en bas à droite de la carte !
+    const legend = document.getElementById("map-legend");
+    legend.style.display = "block"; // On la rend visible
+    map.controls[google.maps.ControlPosition.BOTTOM_LEFT].push(legend);
     map.addListener('idle', function() {
-        if (garesVisible) {
-            actualiserAffichageGares();
-        }
+        if (garesVisible) actualiserAffichageGares();
     });
 }
 
-// 6. Gestion des clics sur le menu (Boutons indépendants On/Off)
+// Fonction utilitaire pour allumer/éteindre un bouton HTML
+function basculerBouton(appName, estActif) {
+    const bouton = document.getElementById("btn-" + appName);
+    if (bouton) {
+        if (estActif) bouton.classList.add("active");
+        else bouton.classList.remove("active");
+    }
+}
+
+// 6. Gestion des clics sur le menu
 function loadApp(appName) {
     if (!map) initMap(); 
 
+    // On ferme la bulle d'info quand on change de menu pour faire propre
+    if (infoWindow) infoWindow.close();
+
     if (appName === 'gares') {
         garesVisible = !garesVisible; 
+        basculerBouton('gares', garesVisible); // <-- Mise à jour du bouton
+        
         if (!garesDataLoaded && garesVisible) {
             loadGares();    
         } else {
@@ -208,11 +247,12 @@ function loadApp(appName) {
     } 
     else if (appName === 'reseau') {
         reseauVisible = !reseauVisible; 
+        basculerBouton('reseau', reseauVisible); // <-- Mise à jour du bouton
         loadLGVLines(); 
     }
-    // NOUVEAU MODULE : FRÉQUENTATION
     else if (appName === 'frequentation') {
         frequentationVisible = !frequentationVisible; 
+        basculerBouton('frequentation', frequentationVisible); // <-- Mise à jour du bouton
         loadFrequentation(); 
     }
 }
