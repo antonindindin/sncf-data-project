@@ -116,16 +116,84 @@ function actualiserAffichageGares() {
             }
         });
 
-        marker.addListener('click', () => {
+        // === NOUVEAU : On ajoute 'async' pour pouvoir attendre la réponse de Wikipédia ===
+        marker.addListener('click', async () => {
+            let nomGare = props['Nom'];
+            
+            // 1. Formatage du nom
+            nomGare = nomGare.replace(/ - /g, '-');
+            let commenceParVoyelle = /^[AEIOUYÉÈÊËÀÂÄÎÏÔÖÛÜ]/i.test(nomGare);
+            let prefixe = commenceParVoyelle ? "Gare d'" : "Gare de ";
+            let nomComplet = prefixe + nomGare;
+
+            // Lien de recherche Wikipédia
+            let lienWiki = "https://fr.wikipedia.org/w/index.php?search=" + encodeURIComponent(nomComplet);
+            // Identifiant unique pour cette gare (le code UIC) pour cibler la bonne bulle
+            let idBulle = props['Code(s) UIC'];
+
+            // 2. On crée le HTML de la bulle avec un espace vide pour l'image
             let contenuBulle = `
-                <div style="color: #333; font-family: sans-serif; padding: 5px; min-width: 150px;">
+                <div style="color: #333; font-family: sans-serif; padding: 5px; min-width: 200px; text-align: center;">
+                    
+                    <div id="wiki-img-${idBulle}" style="min-height: 20px; margin-bottom: 10px;">
+                        <span style="font-size: 11px; color: #888; font-style: italic;">Recherche d'image... ⏳</span>
+                    </div>
+
                     <h3 style="margin: 0 0 5px 0; color: ${couleurPoint}; font-size: 16px;">${props['Nom']}</h3>
-                    <p style="margin: 0; font-size: 14px;"><strong>Code UIC:</strong> ${props['Code(s) UIC']}</p>
+                    <p style="margin: 0; font-size: 14px;"><strong>Code UIC:</strong> ${idBulle}</p>
                     <p style="margin: 0; font-size: 12px; color: #666;">Catégorie: ${segment}</p>
+                    
+                    <div style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 8px;">
+                        <a href="${lienWiki}" target="_blank" style="color: #0055A4; text-decoration: none; font-size: 13px; font-weight: bold;">
+                            🌐 Voir sur Wikipédia ↗
+                        </a>
+                    </div>
                 </div>
             `;
+            
+            // 3. On ouvre la bulle TOUT DE SUITE (pour que ce soit fluide pour l'utilisateur)
             infoWindow.setContent(contenuBulle);
             infoWindow.open(map, marker); 
+
+            // 4. ON INTERROGE L'API DE WIKIPÉDIA EN ARRIÈRE-PLAN
+            // 4. API Wikipédia (Recherche intelligente en 2 étapes)
+            try {
+                // Étape A : Trouver le VRAI titre exact de la page via la recherche de Wikipédia
+                // (Le paramètre origin=* est obligatoire pour autoriser la requête depuis ton navigateur)
+                let urlSearch = "https://fr.wikipedia.org/w/api.php?action=opensearch&search=" + encodeURIComponent(nomComplet) + "&limit=1&format=json&origin=*";
+                let reponseSearch = await fetch(urlSearch);
+                let dataSearch = await reponseSearch.json();
+
+                let conteneurImage = document.getElementById(`wiki-img-${idBulle}`);
+
+                // Si Wikipédia a trouvé une page correspondante
+                if (dataSearch[1] && dataSearch[1].length > 0) {
+                    
+                    // On récupère le vrai titre officiel (Ex: "Gare de Limoges-Bénédictins" au lieu de "Limoges Bénédictins")
+                    let titreExact = dataSearch[1][0]; 
+
+                    // Étape B : On demande la photo avec le titre parfait
+                    let urlApiWiki = "https://fr.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(titreExact);
+                    let reponse = await fetch(urlApiWiki);
+                    
+                    if (reponse.ok && conteneurImage) {
+                        let donneesWiki = await reponse.json();
+                        if (donneesWiki.thumbnail && donneesWiki.thumbnail.source) {
+                            let urlImage = donneesWiki.thumbnail.source;
+                            conteneurImage.innerHTML = `<img src="${urlImage}" alt="${titreExact}" style="width: 100%; max-height: 140px; object-fit: cover; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">`;
+                        } else {
+                            conteneurImage.style.display = 'none'; // Pas d'image sur la page
+                        }
+                    } else if (conteneurImage) {
+                        conteneurImage.style.display = 'none'; // Erreur sur le résumé
+                    }
+                } else if (conteneurImage) {
+                    conteneurImage.style.display = 'none'; // La page n'existe pas du tout
+                }
+            } catch (erreur) {
+                let conteneurImage = document.getElementById(`wiki-img-${idBulle}`);
+                if (conteneurImage) conteneurImage.style.display = 'none'; // Erreur réseau
+            }
         });
         marqueursAffiches.push(marker); 
     });
@@ -208,8 +276,11 @@ function initMap() {
     reseauData = new google.maps.Data();
     reseauData.setMap(map);
 
-    infoWindow = new google.maps.InfoWindow(); // Création de la bulle vide
-
+// === NOUVEAU : Préparation de l'interface ===
+    infoWindow = new google.maps.InfoWindow({
+        disableAutoPan: true // EMPÊCHE LA CARTE DE BOUGER AU CLIC !
+    });
+    
     // On récupère la légende dans le HTML et on la place en bas à droite de la carte !
     const legend = document.getElementById("map-legend");
     legend.style.display = "block"; // On la rend visible
