@@ -12,52 +12,75 @@
             <div class="logo">SNCF DataHub</div>
             <nav class="main-nav">
                 <ul>
-                    <li><a href="#">Accueil</a></li>
-                    <li><a href="#">À Propos</a></li>
+                    <li><a href="#" onclick="showView('home')">Accueil</a></li>
+                    <li><a href="#" onclick="showView('about')">À Propos</a></li>
                     <li><a href="#">Contact</a></li>
                 </ul>
             </nav>
         </header>
 
         <main class="main-content">
-            <div class="apps-grid">
-                <div id="btn-gares" class="app-card" onclick="loadApp('gares')">
-                    <span class="app-icon">🏛️</span>
-                    <h3>Gares & Villes</h3>
+            <div id="dashboard-view">
+                <div class="apps-grid">
+                    <div id="btn-gares" class="app-card" onclick="loadApp('gares')">
+                        <span class="app-icon">🏛️</span>
+                        <h3>Gares & Villes</h3>
+                    </div>
+                    <div id="btn-reseau" class="app-card" onclick="loadApp('reseau')">
+                        <span class="app-icon">🛤️</span>
+                        <h3>Réseau Ferré</h3>
+                    </div>
+                    <div id="btn-frequentation" class="app-card" onclick="loadApp('frequentation')">
+                        <span class="app-icon">👥</span>
+                        <h3>Fréquentation</h3>
+                    </div>
+                    <div id="btn-tarifs" class="app-card" onclick="loadApp('tarifs')">
+                        <span class="app-icon">💶</span>
+                        <h3>Comparateur Tarifs</h3>
+                    </div>
                 </div>
-                <div id="btn-reseau" class="app-card" onclick="loadApp('reseau')">
-                    <span class="app-icon">🛤️</span>
-                    <h3>Réseau Ferré</h3>
-                </div>
-                <div id="btn-frequentation" class="app-card" onclick="loadApp('frequentation')">
-                    <span class="app-icon">👥</span>
-                    <h3>Fréquentation</h3>
-                </div>
-                <div id="btn-tarifs" class="app-card" onclick="loadApp('tarifs')">
-                    <span class="app-icon">💶</span>
-                    <h3>Comparateur Tarifs</h3>
+
+                <div id="app-container"></div>
+
+                <div id="map-legend" class="map-legend" style="display: none;">
+                    <h4>Légende</h4>
+                    <div class="legend-item"><span class="legend-dot" style="background:#E20074;"></span>Gare Nationale / TGV</div>
+                    <div class="legend-item"><span class="legend-dot" style="background:#0088CE;"></span>Gare Régionale</div>
+                    <div class="legend-item"><span class="legend-dot" style="background:#6C757D;"></span>Gare Locale</div>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
+                    <div class="legend-item"><span class="legend-line" style="background:#E20074;"></span>Ligne LGV</div>
+                    <div class="legend-item"><span class="legend-line" style="background:#0055A4;"></span>Ligne Classique</div>
                 </div>
             </div>
 
-            <div id="app-container"></div>
-
-            <div id="map-legend" class="map-legend">
-                <h4>Légende</h4>
-                <div class="legend-item"><span class="legend-dot" style="background:#E20074;"></span>Gare Nationale / TGV</div>
-                <div class="legend-item"><span class="legend-dot" style="background:#0088CE;"></span>Gare Régionale</div>
-                <div class="legend-item"><span class="legend-dot" style="background:#6C757D;"></span>Gare Locale</div>
-                <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
-                <div class="legend-item"><span class="legend-line" style="background:#E20074;"></span>Ligne LGV</div>
-                <div class="legend-item"><span class="legend-line" style="background:#0055A4;"></span>Ligne Classique</div>
+            <div id="about-view" class="about-card" style="display: none;">
+                <h2>À Propos du SNCF DataHub</h2>
+                <p>Bienvenue sur le SNCF DataHub, une plateforme interactive permettant de visualiser, d'explorer et d'analyser les données ouvertes (Open Data) relatives au réseau ferroviaire français.</p>
+                
+                <h3>L'Auteur</h3>
+                <p>Ce projet d'interface cartographique et d'analyse de données est développé par un étudiant en 3e année de Licence (CPES Modélisation et Numérique en Sciences de la Matière à Montpellier).</p>
+                
+                <h3>Sources des Données</h3>
+                <p>Les informations présentées sur cette application proviennent majoritairement des portails open data officiels :</p>
+                <ul>
+                    <li><strong>Gares et Villes :</strong> Localisation et segmentation des gares de voyageurs (SNCF Réseau).</li>
+                    <li><strong>Réseau Ferré :</strong> Tracé géographique des lignes classiques et des Lignes à Grande Vitesse (LGV).</li>
+                    <li><strong>Fréquentation :</strong> Données annuelles estimées des voyageurs par gare.</li>
+                </ul>
+                
+                <h3>Technologies Utilisées</h3>
+                <ul>
+                    <li><strong>Interface :</strong> HTML5, CSS3, Vanilla JavaScript.</li>
+                    <li><strong>Cartographie :</strong> Google Maps JavaScript API (incluant les bibliothèques Data et Visualization).</li>
+                    <li><strong>Enrichissement :</strong> API REST de Wikipédia pour la récupération dynamique des images et résumés de gares.</li>
+                </ul>
             </div>
         </main>
     </div>
 
-    <!-- Scripts locaux -->
     <script src="script.js"></script>
     <script src="frequentation.js"></script>
     
-    <!-- Script de l'API Google Maps (asynchrone) -->
     <script async
     src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap&libraries=visualization">
     </script>
