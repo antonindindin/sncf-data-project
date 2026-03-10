@@ -1,6 +1,6 @@
 // Variables globales
 let map; 
-let infoWindow; // <-- NOUVEAU : La bulle d'information
+let infoWindow; 
 
 // === RESEAU FERRE (Lignes) ===
 let reseauData; 
@@ -27,14 +27,12 @@ function loadLGVLines() {
             let typeLigne = event.feature.getProperty('CATLIG');
             let idLigne = event.feature.getProperty('LIB_LIGNE');
             
-            // On crée le HTML de la bulle
             let contenuBulle = `
                 <div style="color: #333; font-family: sans-serif; padding: 5px;">
                     <h3 style="margin: 0 0 5px 0; color: #004696; font-size: 16px;">Ligne ${idLigne}</h3>
                     <p style="margin: 0; font-size: 14px;"><strong>Type:</strong> ${typeLigne}</p>
                 </div>
             `;
-            // On met le texte, on la place à l'endroit du clic, et on l'ouvre
             infoWindow.setContent(contenuBulle);
             infoWindow.setPosition(event.latLng);
             infoWindow.open(map);
@@ -116,22 +114,17 @@ function actualiserAffichageGares() {
             }
         });
 
-        // === NOUVEAU : On ajoute 'async' pour pouvoir attendre la réponse de Wikipédia ===
         marker.addListener('click', async () => {
             let nomGare = props['Nom'];
             
-            // 1. Formatage du nom
             nomGare = nomGare.replace(/ - /g, '-');
             let commenceParVoyelle = /^[AEIOUYÉÈÊËÀÂÄÎÏÔÖÛÜ]/i.test(nomGare);
             let prefixe = commenceParVoyelle ? "Gare d'" : "Gare de ";
             let nomComplet = prefixe + nomGare;
 
-            // Lien de recherche Wikipédia
             let lienWiki = "https://fr.wikipedia.org/w/index.php?search=" + encodeURIComponent(nomComplet);
-            // Identifiant unique pour cette gare (le code UIC) pour cibler la bonne bulle
             let idBulle = props['Code(s) UIC'];
 
-            // 2. On crée le HTML de la bulle avec un espace vide pour l'image
             let contenuBulle = `
                 <div style="color: #333; font-family: sans-serif; padding: 5px; min-width: 200px; text-align: center;">
                     
@@ -151,28 +144,19 @@ function actualiserAffichageGares() {
                 </div>
             `;
             
-            // 3. On ouvre la bulle TOUT DE SUITE (pour que ce soit fluide pour l'utilisateur)
             infoWindow.setContent(contenuBulle);
             infoWindow.open(map, marker); 
 
-            // 4. ON INTERROGE L'API DE WIKIPÉDIA EN ARRIÈRE-PLAN
-            // 4. API Wikipédia (Recherche intelligente en 2 étapes)
             try {
-                // Étape A : Trouver le VRAI titre exact de la page via la recherche de Wikipédia
-                // (Le paramètre origin=* est obligatoire pour autoriser la requête depuis ton navigateur)
                 let urlSearch = "https://fr.wikipedia.org/w/api.php?action=opensearch&search=" + encodeURIComponent(nomComplet) + "&limit=1&format=json&origin=*";
                 let reponseSearch = await fetch(urlSearch);
                 let dataSearch = await reponseSearch.json();
 
                 let conteneurImage = document.getElementById(`wiki-img-${idBulle}`);
 
-                // Si Wikipédia a trouvé une page correspondante
                 if (dataSearch[1] && dataSearch[1].length > 0) {
-                    
-                    // On récupère le vrai titre officiel (Ex: "Gare de Limoges-Bénédictins" au lieu de "Limoges Bénédictins")
                     let titreExact = dataSearch[1][0]; 
 
-                    // Étape B : On demande la photo avec le titre parfait
                     let urlApiWiki = "https://fr.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(titreExact);
                     let reponse = await fetch(urlApiWiki);
                     
@@ -182,17 +166,17 @@ function actualiserAffichageGares() {
                             let urlImage = donneesWiki.thumbnail.source;
                             conteneurImage.innerHTML = `<img src="${urlImage}" alt="${titreExact}" style="width: 100%; max-height: 140px; object-fit: cover; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">`;
                         } else {
-                            conteneurImage.style.display = 'none'; // Pas d'image sur la page
+                            conteneurImage.style.display = 'none'; 
                         }
                     } else if (conteneurImage) {
-                        conteneurImage.style.display = 'none'; // Erreur sur le résumé
+                        conteneurImage.style.display = 'none'; 
                     }
                 } else if (conteneurImage) {
-                    conteneurImage.style.display = 'none'; // La page n'existe pas du tout
+                    conteneurImage.style.display = 'none'; 
                 }
             } catch (erreur) {
                 let conteneurImage = document.getElementById(`wiki-img-${idBulle}`);
-                if (conteneurImage) conteneurImage.style.display = 'none'; // Erreur réseau
+                if (conteneurImage) conteneurImage.style.display = 'none'; 
             }
         });
         marqueursAffiches.push(marker); 
@@ -201,17 +185,14 @@ function actualiserAffichageGares() {
 
 // 4. Fonction pour charger la carte de chaleur (Fréquentation)
 function loadFrequentation() {
-    // Si la heatmap n'est pas encore créée
     if (!heatmap) {
         console.log("Création de la Heatmap...");
         
-        // On vérifie que les données sont bien là
         if (typeof frequentationData === 'undefined') {
             console.error("Fichier frequentation.js manquant ou mal chargé.");
             return;
         }
 
-        // On formate les données pour l'API Google
         let heatmapData = frequentationData.map(point => {
             return {
                 location: new google.maps.LatLng(point.lat, point.lng),
@@ -219,41 +200,23 @@ function loadFrequentation() {
             };
         });
 
-        
-        // On crée la couche visuelle avec des paramètres pour un rendu DIFFUS
         heatmap = new google.maps.visualization.HeatmapLayer({
             data: heatmapData,
-            
-            // --- CHANGEMENT 1 : LE RAYON ---
-            // Passe de 25 à 80 (ou même 100 ou 120 selon tes goûts).
-            // Plus c'est grand, plus les points se mélangent en une nappe floue.
             radius: 30,       
-
-            // --- CHANGEMENT 2 : L'OPACITÉ ---
-            // Un peu plus transparent pour un effet plus "vaporeux".
             opacity: 0.7,     
-
-            // --- CHANGEMENT 3 : LE PLAFOND D'INTENSITÉ (CRUCIAL) ---
-            // On DÉCOMMENTE cette ligne.
-            // On fixe le "maximum rouge" à 5 millions (moyenne sur 10 ans).
-            // Ainsi, Paris sera rouge, mais Lyon, Bordeaux, Lille le seront aussi,
-            // créant des zones de chaleur régionales au lieu d'un seul point à Paris.
             maxIntensity: 5000000, 
-
             gradient: [
-                'rgba(0, 0, 255, 0)',     // Transparent
-                'rgba(65, 105, 225, 1)',  // Bleu froid
-                'rgba(0, 255, 255, 1)',   // Cyan
-                'rgba(0, 255, 0, 1)',     // Vert
-                'rgba(255, 255, 0, 1)',   // Jaune
-                'rgba(255, 165, 0, 1)',   // Orange
-                'rgba(255, 0, 0, 1)'      // Rouge chaud
+                'rgba(0, 0, 255, 0)',     
+                'rgba(65, 105, 225, 1)',  
+                'rgba(0, 255, 255, 1)',   
+                'rgba(0, 255, 0, 1)',     
+                'rgba(255, 255, 0, 1)',   
+                'rgba(255, 165, 0, 1)',   
+                'rgba(255, 0, 0, 1)'      
             ]
         });
     }
-// ... fin de la fonction ...
 
-    // On l'affiche ou on la cache en fonction de l'interrupteur
     if (frequentationVisible) {
         heatmap.setMap(map);
     } else {
@@ -276,15 +239,14 @@ function initMap() {
     reseauData = new google.maps.Data();
     reseauData.setMap(map);
 
-// === NOUVEAU : Préparation de l'interface ===
     infoWindow = new google.maps.InfoWindow({
-        disableAutoPan: true // EMPÊCHE LA CARTE DE BOUGER AU CLIC !
+        disableAutoPan: true 
     });
     
-    // On récupère la légende dans le HTML et on la place en bas à droite de la carte !
     const legend = document.getElementById("map-legend");
-    legend.style.display = "block"; // On la rend visible
+    legend.style.display = "block"; 
     map.controls[google.maps.ControlPosition.BOTTOM_LEFT].push(legend);
+    
     map.addListener('idle', function() {
         if (garesVisible) actualiserAffichageGares();
     });
@@ -299,16 +261,15 @@ function basculerBouton(appName, estActif) {
     }
 }
 
-// 6. Gestion des clics sur le menu
+// 6. Gestion des clics sur le menu des données
 function loadApp(appName) {
     if (!map) initMap(); 
 
-    // On ferme la bulle d'info quand on change de menu pour faire propre
     if (infoWindow) infoWindow.close();
 
     if (appName === 'gares') {
         garesVisible = !garesVisible; 
-        basculerBouton('gares', garesVisible); // <-- Mise à jour du bouton
+        basculerBouton('gares', garesVisible); 
         
         if (!garesDataLoaded && garesVisible) {
             loadGares();    
@@ -318,15 +279,34 @@ function loadApp(appName) {
     } 
     else if (appName === 'reseau') {
         reseauVisible = !reseauVisible; 
-        basculerBouton('reseau', reseauVisible); // <-- Mise à jour du bouton
+        basculerBouton('reseau', reseauVisible); 
         loadLGVLines(); 
     }
     else if (appName === 'frequentation') {
         frequentationVisible = !frequentationVisible; 
-        basculerBouton('frequentation', frequentationVisible); // <-- Mise à jour du bouton
+        basculerBouton('frequentation', frequentationVisible); 
         loadFrequentation(); 
+    }
+}
+
+// === NOUVEAU : 7. Gestion de l'affichage des onglets du menu principal ===
+function showView(viewName) {
+    const dashboardView = document.getElementById('dashboard-view');
+    const aboutView = document.getElementById('about-view');
+
+    if (viewName === 'home') {
+        dashboardView.style.display = 'block';
+        aboutView.style.display = 'none';
+        // Si la carte n'était pas encore chargée, on force un redimensionnement
+        if (map) {
+            google.maps.event.trigger(map, 'resize');
+        }
+    } else if (viewName === 'about') {
+        dashboardView.style.display = 'none';
+        aboutView.style.display = 'block';
     }
 }
 
 window.initMap = initMap;
 window.loadApp = loadApp;
+window.showView = showView; // On expose la fonction pour qu'elle soit cliquable dans le HTML
