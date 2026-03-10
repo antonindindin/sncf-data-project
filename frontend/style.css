@@ -105,11 +105,11 @@ body {
     color: #003570;
 }
 
-/* === LE CONTENEUR DE LA CARTE (CORRECTION) === */
+/* Le conteneur de la carte */
 #app-container {
     height: 600px;
     width: 100%;
-    background-color: #e5e3df; /* Couleur de fond en attendant le chargement */
+    background-color: #e5e3df;
     border-radius: 10px;
     box-shadow: var(--sncf-shadow);
     overflow: hidden;
@@ -153,6 +153,39 @@ body {
     margin-right: 12px;
 }
 
+/* === NOUVEAU : VUE À PROPOS === */
+.about-card {
+    background-color: var(--sncf-white);
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: var(--sncf-shadow);
+    line-height: 1.6;
+    font-size: 1.05rem;
+}
+
+.about-card h2 {
+    color: #003570;
+    margin-top: 0;
+    border-bottom: 3px solid var(--sncf-blue);
+    padding-bottom: 12px;
+    display: inline-block;
+    font-size: 1.8rem;
+}
+
+.about-card h3 {
+    color: var(--sncf-blue);
+    margin-top: 30px;
+    font-size: 1.3rem;
+}
+
+.about-card ul {
+    padding-left: 20px;
+}
+
+.about-card li {
+    margin-bottom: 10px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .main-header {
@@ -171,6 +204,10 @@ body {
     }
 
     #app-container {
-        height: 400px; /* Un peu plus petit sur mobile */
+        height: 400px;
+    }
+    
+    .about-card {
+        padding: 20px;
     }
 }
