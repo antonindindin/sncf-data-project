@@ -13,6 +13,10 @@ let marqueursAffiches = [];
 let garesDataLoaded = false;
 let garesVisible = false;
 
+// === NOUVEAU : WI-FI ===
+let wifiData = [];
+let wifiDataLoaded = false;
+
 // === FREQUENTATION (Heatmap) ===
 let heatmap = null;
 let frequentationVisible = false;
@@ -52,6 +56,20 @@ function loadLGVLines() {
     });
 }
 
+// Fonction pour charger les données Wi-Fi
+async function loadWifiData() {
+    if (!wifiDataLoaded) {
+        console.log("Téléchargement des données Wi-Fi...");
+        try {
+            const reponse = await fetch('gares-equipees-du-wifi.json');
+            wifiData = await reponse.json();
+            wifiDataLoaded = true;
+        } catch (erreur) {
+            console.error("Erreur de chargement Wi-Fi :", erreur);
+        }
+    }
+}
+
 // 2. Fonction de téléchargement des gares
 async function loadGares() {
     if (!garesDataLoaded) {
@@ -62,10 +80,14 @@ async function loadGares() {
             toutesLesGares = data.features; 
             garesDataLoaded = true;
         } catch (erreur) {
-            console.error("Erreur de chargement :", erreur);
+            console.error("Erreur de chargement gares:", erreur);
             return;
         }
     }
+    
+    // On s'assure que les données Wi-Fi sont aussi chargées avant d'afficher
+    await loadWifiData(); 
+    
     actualiserAffichageGares();
 }
 
@@ -125,6 +147,21 @@ function actualiserAffichageGares() {
             let lienWiki = "https://fr.wikipedia.org/w/index.php?search=" + encodeURIComponent(nomComplet);
             let idBulle = props['Code(s) UIC'];
 
+            // VÉRIFICATION WI-FI
+            let aLeWifi = wifiData.some(gareWifi => gareWifi.nom.toLowerCase() === props['Nom'].toLowerCase());
+            
+            // Nouveau badge Wi-Fi avec icône SVG minimaliste (point + 2 arcs)
+            let badgeWifi = aLeWifi 
+                ? `<span style="background-color: #0088CE; color: white; padding: 4px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-left: 8px; display: inline-flex; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.2);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                        <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                        <line x1="12" y1="20" x2="12.01" y2="20"></line>
+                    </svg>
+                    Wi-Fi
+                   </span>` 
+                : '';
+
             let contenuBulle = `
                 <div style="color: #333; font-family: sans-serif; padding: 5px; min-width: 200px; text-align: center;">
                     
@@ -132,7 +169,9 @@ function actualiserAffichageGares() {
                         <span style="font-size: 11px; color: #888; font-style: italic;">Recherche d'image... ⏳</span>
                     </div>
 
-                    <h3 style="margin: 0 0 5px 0; color: ${couleurPoint}; font-size: 16px;">${props['Nom']}</h3>
+                    <h3 style="margin: 0 0 5px 0; color: ${couleurPoint}; font-size: 16px; display: flex; align-items: center; justify-content: center;">
+                        ${props['Nom']} ${badgeWifi}
+                    </h3>
                     <p style="margin: 0; font-size: 14px;"><strong>Code UIC:</strong> ${idBulle}</p>
                     <p style="margin: 0; font-size: 12px; color: #666;">Catégorie: ${segment}</p>
                     
@@ -289,7 +328,7 @@ function loadApp(appName) {
     }
 }
 
-// === NOUVEAU : 7. Gestion de l'affichage des onglets du menu principal ===
+// 7. Gestion de l'affichage des onglets du menu principal
 function showView(viewName) {
     const dashboardView = document.getElementById('dashboard-view');
     const aboutView = document.getElementById('about-view');
@@ -297,7 +336,6 @@ function showView(viewName) {
     if (viewName === 'home') {
         dashboardView.style.display = 'block';
         aboutView.style.display = 'none';
-        // Si la carte n'était pas encore chargée, on force un redimensionnement
         if (map) {
             google.maps.event.trigger(map, 'resize');
         }
@@ -309,4 +347,4 @@ function showView(viewName) {
 
 window.initMap = initMap;
 window.loadApp = loadApp;
-window.showView = showView; // On expose la fonction pour qu'elle soit cliquable dans le HTML
+window.showView = showView;
