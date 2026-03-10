@@ -147,19 +147,16 @@ function actualiserAffichageGares() {
             let lienWiki = "https://fr.wikipedia.org/w/index.php?search=" + encodeURIComponent(nomComplet);
             let idBulle = props['Code(s) UIC'];
 
-            // VÉRIFICATION WI-FI
+            // === ICÔNE WI-FI MINIMALISTE (SVG) ===
             let aLeWifi = wifiData.some(gareWifi => gareWifi.nom.toLowerCase() === props['Nom'].toLowerCase());
             
-            // Nouveau badge Wi-Fi avec icône SVG minimaliste (point + 2 arcs)
+            // Le SVG contient le point central et les 2 arcs de cercle supérieurs
             let badgeWifi = aLeWifi 
-                ? `<span style="background-color: #0088CE; color: white; padding: 4px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; margin-left: 8px; display: inline-flex; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.2);">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
-                        <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
-                        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
-                        <line x1="12" y1="20" x2="12.01" y2="20"></line>
-                    </svg>
-                    Wi-Fi
-                   </span>` 
+                ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0088CE" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 8px; vertical-align: middle;" title="Wi-Fi disponible">
+                     <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                     <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                     <circle cx="12" cy="20" r="1.5" fill="#0088CE" stroke="none"/>
+                   </svg>` 
                 : '';
 
             let contenuBulle = `
