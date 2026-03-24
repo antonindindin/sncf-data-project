@@ -17,7 +17,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1500px;
     margin: 0 auto;
 }
 
@@ -107,13 +107,15 @@ body {
 
 /* Le conteneur de la carte */
 #app-container {
-    height: 600px;
     width: 100%;
-    background-color: #e5e3df;
-    border-radius: 10px;
-    box-shadow: var(--sncf-shadow);
-    overflow: hidden;
-    position: relative;
+    /* Remplace l'ancienne hauteur par celle-ci (75% de la hauteur de ton écran) */
+    height: 100vh; 
+    
+    /* Garde tes autres réglages s'il y en a (border-radius, box-shadow...) */
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    background-color: #f8f9fa;
+    margin-top: 20px;
 }
 
 /* Légende de la carte */
