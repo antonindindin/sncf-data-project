@@ -40,7 +40,7 @@ function appliquerStyleReseau() {
                     strokeWeight: epaisseurBase + 3,
                     strokeOpacity: 1.0,
                     zIndex: 100,
-                    clickable: false,
+                    clickable: true, // <-- CHANGÉ ICI
                     visible: true
                 };
             } else {
@@ -49,7 +49,7 @@ function appliquerStyleReseau() {
                     strokeWeight: epaisseurBase,
                     strokeOpacity: 0.3,
                     zIndex: 1,
-                    clickable: false,
+                    clickable: true, // <-- CHANGÉ ICI
                     visible: true
                 };
             }
@@ -61,12 +61,11 @@ function appliquerStyleReseau() {
             strokeWeight: epaisseurBase,
             strokeOpacity: 0.8,
             zIndex: estLGV ? 10 : 5,
-            clickable: false, 
+            clickable: true, // <-- CHANGÉ ICI
             visible: true
         };
     });
 }
-
 function selectionnerLigne(feature, latLng) {
     ligneSelectionnee = feature;
     appliquerStyleReseau();
@@ -329,81 +328,30 @@ function initMap() {
         if (garesVisible) actualiserAffichageGares();
     });
 
-    // ECOUTEUR GLOBAL SUR LA CARTE (Détection de clic sur lignes)
-    map.addListener('click', function(event) {
-        let aCliqueSurLigne = false;
+    // === NOUVEAU : GESTION DES CLICS ULTRA-OPTIMISÉE ===
+    
+    // Petite variable pour éviter les conflits de clics
+    let clicSurLigne = false;
 
-        if (reseauVisible) {
-            let clickLatLng = event.latLng;
-            let toleranceDegrees = 0.01;
+    // 1. Clic NATIF sur une ligne du réseau (Google gère la géométrie tout seul, instantanément)
+    reseauData.addListener('click', function(event) {
+        if (!reseauVisible) return;
+        clicSurLigne = true;
+        selectionnerLigne(event.feature, event.latLng);
+        
+        // On réinitialise après un instant
+        setTimeout(() => { clicSurLigne = false; }, 100);
+    });
 
-            reseauData.forEach(function(feature) {
-                if (aCliqueSurLigne) return;
-
-                let geometry = feature.getGeometry();
-                if (!geometry) return;
-
-                let lignes = [];
-                if (geometry.getType() === 'LineString') {
-                    lignes.push(geometry.getArray());
-                } else if (geometry.getType() === 'MultiLineString') {
-                    lignes = geometry.getArray().map(ligne => ligne.getArray());
-                }
-
-                for (let i = 0; i < lignes.length; i++) {
-                    let poly = new google.maps.Polyline({path: lignes[i]});
-                    if (google.maps.geometry.poly.isLocationOnEdge(clickLatLng, poly, toleranceDegrees)) {
-                        aCliqueSurLigne = true;
-                        selectionnerLigne(feature, clickLatLng);
-                        break;
-                    }
-                }
-            });
-        }
-
-        if (!aCliqueSurLigne) {
+    // 2. Clic dans le vide sur la carte (pour désélectionner)
+    map.addListener('click', function() {
+        if (!clicSurLigne) {
             deselectionnerLigne();
         }
     });
 
-    // CHANGEMENT DE CURSEUR AU SURVOL
-    let timerSurvol = null;
-    
-    map.addListener('mousemove', function(event) {
-        if (!reseauVisible) return;
-
-        if (timerSurvol) return;
-
-        timerSurvol = setTimeout(() => {
-            let cursorLatLng = event.latLng;
-            let toleranceDegrees = 0.01;
-            let surLigne = false;
-
-            reseauData.forEach(function(feature) {
-                if (surLigne) return;
-                let geometry = feature.getGeometry();
-                if (!geometry) return;
-
-                let lignes = [];
-                if (geometry.getType() === 'LineString') {
-                    lignes.push(geometry.getArray());
-                } else if (geometry.getType() === 'MultiLineString') {
-                    lignes = geometry.getArray().map(ligne => ligne.getArray());
-                }
-
-                for (let i = 0; i < lignes.length; i++) {
-                    let poly = new google.maps.Polyline({path: lignes[i]});
-                    if (google.maps.geometry.poly.isLocationOnEdge(cursorLatLng, poly, toleranceDegrees)) {
-                        surLigne = true;
-                        break;
-                    }
-                }
-            });
-
-            map.setOptions({ draggableCursor: surLigne ? 'pointer' : '' });
-            timerSurvol = null;
-        }, 50); 
-    });
+    // NOTE : Le changement de curseur en petite main ("pointer") se fait maintenant
+    // TOUT SEUL car nous avons mis `clickable: true` sur les lignes ! Plus besoin de mousemove !
 }
 
 // Fonction utilitaire pour allumer/éteindre un bouton HTML
