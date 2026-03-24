@@ -6,6 +6,7 @@ let infoWindow;
 let reseauData; 
 let reseauDataLoaded = false; 
 let reseauVisible = false;    
+let ligneSelectionnee = null; // Mémorise la ligne cliquée
 
 // === GARES ET VILLES (Points ultra-optimisés) ===
 let toutesLesGares = [];      
@@ -21,39 +22,88 @@ let wifiDataLoaded = false;
 let heatmap = null;
 let frequentationVisible = false;
 
-// 1. Fonction pour le réseau ferré
+// --- NOUVEAU : GESTION DES LIGNES (Idées 1, 2, 3) ---
+
+function appliquerStyleReseau() {
+    reseauData.setStyle(function(feature) { 
+        if (!reseauVisible) return { visible: false };
+        
+        // On détermine à l'avance la couleur et l'épaisseur de base selon le type de ligne
+        let estLGV = (feature.getProperty('CATLIG') === 'Ligne à grande vitesse');
+        let couleurBase = estLGV ? '#E20074' : '#0055A4';
+        let epaisseurBase = estLGV ? 4 : 1.5;
+
+        // Idée 2 : Mode FOCUS / EXTINCTION
+        if (ligneSelectionnee) {
+            if (feature === ligneSelectionnee) {
+                // 1. La ligne sélectionnée est mise en valeur (plus épaisse, opaque, au premier plan)
+                return {
+                    strokeColor: couleurBase, // Elle garde sa couleur SNCF
+                    strokeWeight: epaisseurBase + 3, // On la grossit un peu
+                    strokeOpacity: 1.0,
+                    zIndex: 100,
+                    clickable: false,
+                    visible: true
+                };
+            } else {
+                // 2. Toutes les AUTRES lignes s'éteignent (Gris clair, transparentes, en arrière-plan)
+                return {
+                    strokeColor: '#999999',
+                    strokeWeight: epaisseurBase,
+                    strokeOpacity: 0.3,
+                    zIndex: 1,
+                    clickable: false,
+                    visible: true
+                };
+            }
+        }
+
+        // Mode Normal (si aucune ligne n'est cliquée)
+        return {
+            strokeColor: couleurBase,
+            strokeWeight: epaisseurBase,
+            strokeOpacity: 0.8,
+            zIndex: estLGV ? 10 : 5,
+            clickable: false, 
+            visible: true
+        };
+    });
+}
+
+function selectionnerLigne(feature, latLng) {
+    ligneSelectionnee = feature;
+    appliquerStyleReseau(); // Met à jour le visuel immédiatement
+    
+    let typeLigne = feature.getProperty('CATLIG');
+    let idLigne = feature.getProperty('LIB_LIGNE') || "Inconnue";
+    
+    let contenuBulle = `
+        <div style="color: #333; font-family: sans-serif; padding: 5px;">
+            <h3 style="margin: 0 0 5px 0; color: #004696; font-size: 16px;">Ligne ${idLigne}</h3>
+            <p style="margin: 0; font-size: 14px;"><strong>Type:</strong> ${typeLigne}</p>
+        </div>
+    `;
+    infoWindow.setContent(contenuBulle);
+    infoWindow.setPosition(latLng);
+    infoWindow.open(map);
+}
+
+function deselectionnerLigne() {
+    if (ligneSelectionnee || infoWindow.getMap()) {
+        ligneSelectionnee = null;
+        appliquerStyleReseau();
+        infoWindow.close(); // Ferme la bulle (Idée 3)
+    }
+}
+
+// 1. Fonction pour le réseau ferré (Mise à jour)
 function loadLGVLines() {
     if (!reseauDataLoaded) {
         reseauData.loadGeoJson('reseau.geojson'); 
         reseauDataLoaded = true; 
-
-        reseauData.addListener('click', function(event) { 
-            let typeLigne = event.feature.getProperty('CATLIG');
-            let idLigne = event.feature.getProperty('LIB_LIGNE');
-            
-            let contenuBulle = `
-                <div style="color: #333; font-family: sans-serif; padding: 5px;">
-                    <h3 style="margin: 0 0 5px 0; color: #004696; font-size: 16px;">Ligne ${idLigne}</h3>
-                    <p style="margin: 0; font-size: 14px;"><strong>Type:</strong> ${typeLigne}</p>
-                </div>
-            `;
-            infoWindow.setContent(contenuBulle);
-            infoWindow.setPosition(event.latLng);
-            infoWindow.open(map);
-        });
+        // L'ancien écouteur de clic a été retiré, c'est la carte qui écoute maintenant !
     }
-
-    reseauData.setStyle(function(feature) { 
-        if (!reseauVisible) return { visible: false };
-        let estLGV = (feature.getProperty('CATLIG') === 'Ligne à grande vitesse');
-        return {
-            strokeColor: estLGV ? '#E20074' : '#0055A4',
-            strokeWeight: estLGV ? 4 : 1.5,
-            strokeOpacity: 0.8,
-            zIndex: estLGV ? 10 : 5,
-            visible: true
-        };
-    });
+    appliquerStyleReseau();
 }
 
 // Fonction pour charger les données Wi-Fi
@@ -286,6 +336,92 @@ function initMap() {
     map.addListener('idle', function() {
         if (garesVisible) actualiserAffichageGares();
     });
+    // --- NOUVEAU : ECOUTEUR GLOBAL SUR LA CARTE (Idées 1 & 3) ---
+    map.addListener('click', function(event) {
+        let aCliqueSurLigne = false;
+
+        // Idée 1 : Algorithme de tolérance géométrique
+        if (reseauVisible) {
+            let clickLatLng = event.latLng;
+            let toleranceDegrees = 0.01; // Tolérance de clic (environ 1 kilomètre)
+
+            // On parcourt les lignes pour calculer leur distance avec le clic
+            reseauData.forEach(function(feature) {
+                if (aCliqueSurLigne) return; // Si on a déjà trouvé, on s'arrête
+
+                let geometry = feature.getGeometry();
+                if (!geometry) return;
+
+                // Extraction des coordonnées de la ligne
+                let lignes = [];
+                if (geometry.getType() === 'LineString') {
+                    lignes.push(geometry.getArray());
+                } else if (geometry.getType() === 'MultiLineString') {
+                    lignes = geometry.getArray().map(ligne => ligne.getArray());
+                }
+
+                // On vérifie si le clic est sur le bord de la ligne (avec tolérance)
+                for (let i = 0; i < lignes.length; i++) {
+                    let poly = new google.maps.Polyline({path: lignes[i]});
+                    if (google.maps.geometry.poly.isLocationOnEdge(clickLatLng, poly, toleranceDegrees)) {
+                        aCliqueSurLigne = true;
+                        selectionnerLigne(feature, clickLatLng); // On sélectionne !
+                        break;
+                    }
+                }
+            });
+        }
+
+        // Idée 3 : Fermer l'action si on a cliqué dans le vide
+        if (!aCliqueSurLigne) {
+            deselectionnerLigne();
+        }
+    });
+    // --- NOUVEAU : CHANGEMENT DE CURSEUR AU SURVOL (Idée 1) ---
+    let timerSurvol = null;
+    
+    map.addListener('mousemove', function(event) {
+        if (!reseauVisible) return; // Si les lignes sont cachées, on ne fait rien
+
+        // Le "Throttle" : Si le calcul est déjà en cours, on ignore ce mouvement de souris
+        if (timerSurvol) return;
+
+        // On lance un compte à rebours de 50 millisecondes
+        timerSurvol = setTimeout(() => {
+            let cursorLatLng = event.latLng;
+            let toleranceDegrees = 0.01; // Même tolérance que pour le clic
+            let surLigne = false;
+
+            // On fait le même calcul mathématique que pour le clic
+            reseauData.forEach(function(feature) {
+                if (surLigne) return;
+                let geometry = feature.getGeometry();
+                if (!geometry) return;
+
+                let lignes = [];
+                if (geometry.getType() === 'LineString') {
+                    lignes.push(geometry.getArray());
+                } else if (geometry.getType() === 'MultiLineString') {
+                    lignes = geometry.getArray().map(ligne => ligne.getArray());
+                }
+
+                for (let i = 0; i < lignes.length; i++) {
+                    let poly = new google.maps.Polyline({path: lignes[i]});
+                    if (google.maps.geometry.poly.isLocationOnEdge(cursorLatLng, poly, toleranceDegrees)) {
+                        surLigne = true;
+                        break;
+                    }
+                }
+            });
+
+            // On change le curseur global de la carte selon le résultat
+            // 'pointer' = la petite main, '' = flèche normale
+            map.setOptions({ draggableCursor: surLigne ? 'pointer' : '' });
+            
+            // On libère le timer pour autoriser le prochain calcul
+            timerSurvol = null;
+        }, 50); 
+    });
 }
 
 // Fonction utilitaire pour allumer/éteindre un bouton HTML
@@ -317,6 +453,7 @@ function loadApp(appName) {
         reseauVisible = !reseauVisible; 
         basculerBouton('reseau', reseauVisible); 
         loadLGVLines(); 
+        if (!reseauVisible) deselectionnerLigne(); // <-- NOUVEAU : Nettoie si on cache les lignes
     }
     else if (appName === 'frequentation') {
         frequentationVisible = !frequentationVisible; 
