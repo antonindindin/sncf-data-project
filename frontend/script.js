@@ -6,6 +6,7 @@ let infoWindow;
 let reseauData; 
 let reseauDataLoaded = false; 
 let reseauVisible = false;    
+let ligneSelectionnee = null; // Mémorise la ligne cliquée
 
 // === GARES ET VILLES (Points ultra-optimisés) ===
 let toutesLesGares = [];      
@@ -21,39 +22,84 @@ let wifiDataLoaded = false;
 let heatmap = null;
 let frequentationVisible = false;
 
+// --- GESTION DES LIGNES (Focus/Extinction) ---
+
+function appliquerStyleReseau() {
+    reseauData.setStyle(function(feature) { 
+        if (!reseauVisible) return { visible: false };
+        
+        let estLGV = (feature.getProperty('CATLIG') === 'Ligne à grande vitesse');
+        let couleurBase = estLGV ? '#E20074' : '#0055A4';
+        let epaisseurBase = estLGV ? 4 : 1.5;
+
+        // Mode FOCUS / EXTINCTION
+        if (ligneSelectionnee) {
+            if (feature === ligneSelectionnee) {
+                return {
+                    strokeColor: couleurBase,
+                    strokeWeight: epaisseurBase + 3,
+                    strokeOpacity: 1.0,
+                    zIndex: 100,
+                    clickable: false,
+                    visible: true
+                };
+            } else {
+                return {
+                    strokeColor: '#999999',
+                    strokeWeight: epaisseurBase,
+                    strokeOpacity: 0.3,
+                    zIndex: 1,
+                    clickable: false,
+                    visible: true
+                };
+            }
+        }
+
+        // Mode Normal
+        return {
+            strokeColor: couleurBase,
+            strokeWeight: epaisseurBase,
+            strokeOpacity: 0.8,
+            zIndex: estLGV ? 10 : 5,
+            clickable: false, 
+            visible: true
+        };
+    });
+}
+
+function selectionnerLigne(feature, latLng) {
+    ligneSelectionnee = feature;
+    appliquerStyleReseau();
+    
+    let typeLigne = feature.getProperty('CATLIG');
+    let idLigne = feature.getProperty('LIB_LIGNE') || "Inconnue";
+    
+    let contenuBulle = `
+        <div style="color: #333; font-family: sans-serif; padding: 5px;">
+            <h3 style="margin: 0 0 5px 0; color: #004696; font-size: 16px;">Ligne ${idLigne}</h3>
+            <p style="margin: 0; font-size: 14px;"><strong>Type:</strong> ${typeLigne}</p>
+        </div>
+    `;
+    infoWindow.setContent(contenuBulle);
+    infoWindow.setPosition(latLng);
+    infoWindow.open(map);
+}
+
+function deselectionnerLigne() {
+    if (ligneSelectionnee || infoWindow.getMap()) {
+        ligneSelectionnee = null;
+        appliquerStyleReseau();
+        infoWindow.close();
+    }
+}
+
 // 1. Fonction pour le réseau ferré
 function loadLGVLines() {
     if (!reseauDataLoaded) {
         reseauData.loadGeoJson('reseau.geojson'); 
         reseauDataLoaded = true; 
-
-        reseauData.addListener('click', function(event) { 
-            let typeLigne = event.feature.getProperty('CATLIG');
-            let idLigne = event.feature.getProperty('LIB_LIGNE');
-            
-            let contenuBulle = `
-                <div style="color: #333; font-family: sans-serif; padding: 5px;">
-                    <h3 style="margin: 0 0 5px 0; color: #004696; font-size: 16px;">Ligne ${idLigne}</h3>
-                    <p style="margin: 0; font-size: 14px;"><strong>Type:</strong> ${typeLigne}</p>
-                </div>
-            `;
-            infoWindow.setContent(contenuBulle);
-            infoWindow.setPosition(event.latLng);
-            infoWindow.open(map);
-        });
     }
-
-    reseauData.setStyle(function(feature) { 
-        if (!reseauVisible) return { visible: false };
-        let estLGV = (feature.getProperty('CATLIG') === 'Ligne à grande vitesse');
-        return {
-            strokeColor: estLGV ? '#E20074' : '#0055A4',
-            strokeWeight: estLGV ? 4 : 1.5,
-            strokeOpacity: 0.8,
-            zIndex: estLGV ? 10 : 5,
-            visible: true
-        };
-    });
+    appliquerStyleReseau();
 }
 
 // Fonction pour charger les données Wi-Fi
@@ -85,9 +131,7 @@ async function loadGares() {
         }
     }
     
-    // On s'assure que les données Wi-Fi sont aussi chargées avant d'afficher
     await loadWifiData(); 
-    
     actualiserAffichageGares();
 }
 
@@ -147,10 +191,8 @@ function actualiserAffichageGares() {
             let lienWiki = "https://fr.wikipedia.org/w/index.php?search=" + encodeURIComponent(nomComplet);
             let idBulle = props['Code(s) UIC'];
 
-            // === ICÔNE WI-FI MINIMALISTE (SVG) ===
             let aLeWifi = wifiData.some(gareWifi => gareWifi.nom.toLowerCase() === props['Nom'].toLowerCase());
             
-            // Le SVG contient le point central et les 2 arcs de cercle supérieurs
             let badgeWifi = aLeWifi 
                 ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0088CE" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 8px; vertical-align: middle;" title="Wi-Fi disponible">
                      <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
@@ -286,6 +328,82 @@ function initMap() {
     map.addListener('idle', function() {
         if (garesVisible) actualiserAffichageGares();
     });
+
+    // ECOUTEUR GLOBAL SUR LA CARTE (Détection de clic sur lignes)
+    map.addListener('click', function(event) {
+        let aCliqueSurLigne = false;
+
+        if (reseauVisible) {
+            let clickLatLng = event.latLng;
+            let toleranceDegrees = 0.01;
+
+            reseauData.forEach(function(feature) {
+                if (aCliqueSurLigne) return;
+
+                let geometry = feature.getGeometry();
+                if (!geometry) return;
+
+                let lignes = [];
+                if (geometry.getType() === 'LineString') {
+                    lignes.push(geometry.getArray());
+                } else if (geometry.getType() === 'MultiLineString') {
+                    lignes = geometry.getArray().map(ligne => ligne.getArray());
+                }
+
+                for (let i = 0; i < lignes.length; i++) {
+                    let poly = new google.maps.Polyline({path: lignes[i]});
+                    if (google.maps.geometry.poly.isLocationOnEdge(clickLatLng, poly, toleranceDegrees)) {
+                        aCliqueSurLigne = true;
+                        selectionnerLigne(feature, clickLatLng);
+                        break;
+                    }
+                }
+            });
+        }
+
+        if (!aCliqueSurLigne) {
+            deselectionnerLigne();
+        }
+    });
+
+    // CHANGEMENT DE CURSEUR AU SURVOL
+    let timerSurvol = null;
+    
+    map.addListener('mousemove', function(event) {
+        if (!reseauVisible) return;
+
+        if (timerSurvol) return;
+
+        timerSurvol = setTimeout(() => {
+            let cursorLatLng = event.latLng;
+            let toleranceDegrees = 0.01;
+            let surLigne = false;
+
+            reseauData.forEach(function(feature) {
+                if (surLigne) return;
+                let geometry = feature.getGeometry();
+                if (!geometry) return;
+
+                let lignes = [];
+                if (geometry.getType() === 'LineString') {
+                    lignes.push(geometry.getArray());
+                } else if (geometry.getType() === 'MultiLineString') {
+                    lignes = geometry.getArray().map(ligne => ligne.getArray());
+                }
+
+                for (let i = 0; i < lignes.length; i++) {
+                    let poly = new google.maps.Polyline({path: lignes[i]});
+                    if (google.maps.geometry.poly.isLocationOnEdge(cursorLatLng, poly, toleranceDegrees)) {
+                        surLigne = true;
+                        break;
+                    }
+                }
+            });
+
+            map.setOptions({ draggableCursor: surLigne ? 'pointer' : '' });
+            timerSurvol = null;
+        }, 50); 
+    });
 }
 
 // Fonction utilitaire pour allumer/éteindre un bouton HTML
@@ -317,6 +435,7 @@ function loadApp(appName) {
         reseauVisible = !reseauVisible; 
         basculerBouton('reseau', reseauVisible); 
         loadLGVLines(); 
+        if (!reseauVisible) deselectionnerLigne();
     }
     else if (appName === 'frequentation') {
         frequentationVisible = !frequentationVisible; 

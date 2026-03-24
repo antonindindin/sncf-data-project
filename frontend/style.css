@@ -108,10 +108,12 @@ body {
 /* Le conteneur de la carte */
 #app-container {
     width: 100%;
-    /* Remplace l'ancienne hauteur par celle-ci (75% de la hauteur de ton écran) */
-    height: 100vh; 
+    height: 75vh; /* La taille normale dynamique */
     
-    /* Garde tes autres réglages s'il y en a (border-radius, box-shadow...) */
+    /* === LES DEUX LIGNES MAGIQUES À AJOUTER === */
+    max-height: 800px; /* Bloque l'agrandissement infini au dézoom */
+    min-height: 400px; /* Empêche la carte de disparaître sur un tout petit écran */
+    
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     background-color: #f8f9fa;
