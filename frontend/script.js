@@ -4,6 +4,7 @@ let infoWindow;
 
 // === RESEAU FERRE (Lignes) ===
 let reseauData; 
+let reseauHitbox; // NOUVEAU : Calque invisible pour capter les clics larges
 let reseauDataLoaded = false; 
 let reseauVisible = false;    
 let ligneSelectionnee = null; // Mémorise la ligne cliquée
@@ -65,6 +66,16 @@ function appliquerStyleReseau() {
             visible: true
         };
     });
+    reseauHitbox.setStyle(function(feature) {
+        return {
+            strokeWeight: 15,    // Marge d'erreur de clic (ajustez si besoin)
+            strokeOpacity: 0.0,  // Totalement invisible ! (ou 0.01 si bug sur certains vieux navigateurs)
+            zIndex: 20,          // Au-dessus du réseau visuel
+            clickable: true,     // Elle capte la souris
+            visible: reseauVisible,
+            cursor: 'pointer'
+        };
+    });
 }
 function selectionnerLigne(feature, latLng) {
     ligneSelectionnee = feature;
@@ -96,6 +107,7 @@ function deselectionnerLigne() {
 function loadLGVLines() {
     if (!reseauDataLoaded) {
         reseauData.loadGeoJson('reseau.geojson'); 
+        reseauHitbox.loadGeoJson('reseau.geojson'); // NOUVEAU : Charge la donnée dans la hitbox
         reseauDataLoaded = true; 
     }
     appliquerStyleReseau();
@@ -316,6 +328,9 @@ function initMap() {
     reseauData = new google.maps.Data();
     reseauData.setMap(map);
 
+    reseauHitbox = new google.maps.Data();
+    reseauHitbox.setMap(map);
+
     infoWindow = new google.maps.InfoWindow({
         disableAutoPan: true 
     });
@@ -334,10 +349,26 @@ function initMap() {
     let clicSurLigne = false;
 
     // 1. Clic NATIF sur une ligne du réseau (Google gère la géométrie tout seul, instantanément)
-    reseauData.addListener('click', function(event) {
+    // 1. Clic sur la HITBOX (transparente et large)
+    reseauHitbox.addListener('click', function(event) {
         if (!reseauVisible) return;
         clicSurLigne = true;
-        selectionnerLigne(event.feature, event.latLng);
+        
+        // On récupère le nom de la ligne cliquée sur la hitbox
+        let idLigneCliquee = event.feature.getProperty('LIB_LIGNE');
+        let featureVisuelle = null;
+
+        // On cherche sa jumelle dans le calque visuel
+        reseauData.forEach(function(f) {
+            if (f.getProperty('LIB_LIGNE') === idLigneCliquee) {
+                featureVisuelle = f;
+            }
+        });
+
+        // Si on la trouve, on applique la sélection visuelle
+        if (featureVisuelle) {
+            selectionnerLigne(featureVisuelle, event.latLng);
+        }
         
         // On réinitialise après un instant
         setTimeout(() => { clicSurLigne = false; }, 100);
