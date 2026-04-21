@@ -103,14 +103,106 @@ function deselectionnerLigne() {
     }
 }
 
+// === OUTIL : Calcul de distance mathématique pour la "Hitbox" ===
+function distancePointSegment(px, py, ax, ay, bx, by) {
+    let l2 = Math.pow(ax - bx, 2) + Math.pow(ay - by, 2);
+    if (l2 === 0) return Math.sqrt(Math.pow(px - ax, 2) + Math.pow(py - ay, 2));
+    let t = Math.max(0, Math.min(1, ((px - ax) * (bx - ax) + (py - ay) * (by - ay)) / l2));
+    let projX = ax + t * (bx - ax);
+    let projY = ay + t * (by - ay);
+    return Math.sqrt(Math.pow(px - projX, 2) + Math.pow(py - projY, 2));
+}
 // 1. Fonction pour le réseau ferré
 function loadLGVLines() {
+    
+    // Fonction de style (qui gère la couleur, l'épaisseur et la surbrillance)
+    const appliquerStyle = function(feature) { 
+        if (!reseauVisible) return { visible: false };
+        let estLGV = (feature.getProperty('CATLIG') === 'Ligne à grande vitesse');
+        let couleurBase = estLGV ? '#E20074' : '#0055A4';
+        let epaisseurBase = estLGV ? 4 : 1.5;
+
+        // Mode Surbrillance
+        if (ligneSelectionnee) {
+            if (feature === ligneSelectionnee) {
+                return { strokeColor: couleurBase, strokeWeight: epaisseurBase + 4, strokeOpacity: 1.0, zIndex: 100, clickable: false };
+            } else {
+                return { strokeColor: '#999999', strokeWeight: epaisseurBase, strokeOpacity: 0.3, zIndex: 1, clickable: false };
+            }
+        }
+
+        // Mode Normal
+        return { strokeColor: couleurBase, strokeWeight: epaisseurBase, strokeOpacity: 0.8, zIndex: estLGV ? 10 : 5, clickable: false };
+    };
+
     if (!reseauDataLoaded) {
         reseauData.loadGeoJson('reseau.geojson'); 
-        reseauHitbox.loadGeoJson('reseau.geojson'); // NOUVEAU : Charge la donnée dans la hitbox
         reseauDataLoaded = true; 
+
+        // LE NOUVEAU CLIC HITBOX (Directement sur la carte)
+        map.addListener('click', function(event) {
+            if (!reseauVisible) return;
+
+            let clicLat = event.latLng.lat();
+            let clicLng = event.latLng.lng();
+            
+            let meilleureLigne = null;
+            // 0.05 degrés représente environ 5 kilomètres. C'est la taille de ta Hitbox !
+            let minDistance = 0.05; 
+
+            // On cherche la ligne la plus proche de notre clic
+            reseauData.forEach(function(feature) {
+                let geo = feature.getGeometry();
+                
+                const verifierChemin = (path) => {
+                    let pts = path.getArray();
+                    for (let i = 0; i < pts.length - 1; i++) {
+                        let dist = distancePointSegment(
+                            clicLng, clicLat, 
+                            pts[i].lng(), pts[i].lat(), 
+                            pts[i+1].lng(), pts[i+1].lat()
+                        );
+                        if (dist < minDistance) {
+                            minDistance = dist;
+                            meilleureLigne = feature;
+                        }
+                    }
+                };
+
+                if (geo.getType() === 'LineString') { verifierChemin(geo); } 
+                else if (geo.getType() === 'MultiLineString') { geo.getArray().forEach(verifierChemin); }
+            });
+
+            if (meilleureLigne) {
+                // On a cliqué DANS la Hitbox !
+                ligneSelectionnee = meilleureLigne;
+                reseauData.setStyle(appliquerStyle); 
+                
+                let typeLigne = meilleureLigne.getProperty('CATLIG');
+                let idLigne = meilleureLigne.getProperty('LIB_LIGNE');
+                
+                let contenuBulle = `
+                    <div style="color: #333; font-family: sans-serif; padding: 5px;">
+                        <h3 style="margin: 0 0 5px 0; color: #004696; font-size: 16px;">Ligne ${idLigne}</h3>
+                        <p style="margin: 0; font-size: 14px;"><strong>Type:</strong> ${typeLigne}</p>
+                    </div>
+                `;
+                infoWindow.setContent(contenuBulle);
+                infoWindow.setPosition(event.latLng); 
+                infoWindow.open(map);
+            } else {
+                // On a cliqué loin de tout (Désélection)
+                if (ligneSelectionnee) {
+                    ligneSelectionnee = null;
+                    reseauData.setStyle(appliquerStyle); 
+                    infoWindow.close();
+                }
+            }
+        });
     }
-    appliquerStyleReseau();
+
+    // On applique le style au chargement
+    reseauData.setStyle(appliquerStyle);
 }
 
 // Fonction pour charger les données Wi-Fi
