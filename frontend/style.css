@@ -4,7 +4,6 @@
  * ============================================================================
  * Thème d'interface inspiré de la charte graphique SNCF
  * Utilise des variables CSS pour la cohérence des couleurs
- * 
  * Structure responsive pour mobile et desktop
  */
 
@@ -13,10 +12,12 @@
  * ============================================================================ */
 :root {
     --sncf-blue: #0088CE;           /* Bleu principal SNCF */
-    --sncf-white: #FFFFFF;          /* Blanc pur */
+    --sncf-blue-dark: #003570;      /* Bleu foncé (titres) */
+    --sncf-pink: #E20074;           /* Rose/magenta SNCF (LGV) */
+    --sncf-white: #FFFFFF;
     --bg-color: #F4F6F9;            /* Gris très clair (fond) */
-    --text-color: #333333;          /* Gris foncé (texte) */
-    --sncf-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);  /* Ombre douce standard */
+    --text-color: #333333;
+    --sncf-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
 
 /* ============================================================================
@@ -41,7 +42,7 @@ body {
  * ============================================================================ */
 
 .main-header {
-    background: linear-gradient(135deg, var(--sncf-blue) 0%, #003570 100%);
+    background: linear-gradient(135deg, var(--sncf-blue) 0%, var(--sncf-blue-dark) 100%);
     margin: -20px -20px 30px -20px;
     padding: 25px 20px;
     box-shadow: var(--sncf-shadow);
@@ -58,7 +59,6 @@ body {
     letter-spacing: 1px;
 }
 
-/* Navigation horizontale avec liens */
 .main-nav ul {
     list-style: none;
     display: flex;
@@ -71,15 +71,14 @@ body {
     color: var(--sncf-white);
     text-decoration: none;
     font-weight: 500;
-    transition: opacity 0.3s ease, text-shadow 0.3s ease;
+    transition: opacity 0.3s ease, background-color 0.3s ease;
     padding: 8px 12px;
     border-radius: 4px;
 }
 
 .main-nav a:hover {
-    opacity: 0.8;
-    background-color: rgba(255, 255, 255, 0.1);
-    text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+    opacity: 0.9;
+    background-color: rgba(255, 255, 255, 0.15);
 }
 
 /* ============================================================================
@@ -93,7 +92,6 @@ body {
     margin-bottom: 30px;
 }
 
-/* Carte individuelle d'une application */
 .app-card {
     background-color: var(--sncf-white);
     padding: 20px;
@@ -102,17 +100,28 @@ body {
     text-align: center;
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 2px solid transparent;
+    position: relative;
 }
 
 .app-card:hover {
-    transform: translateY(-5px);  /* Animation de montée */
+    transform: translateY(-5px);
     box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
 }
 
-/* Carte active (sélectionnée) */
 .app-card.active {
-    border: 2px solid var(--sncf-blue);
-    background-color: #e6f3fb;  /* Bleu pâle */
+    border-color: var(--sncf-blue);
+    background-color: #e6f3fb;
+}
+
+.app-card.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.app-card.disabled:hover {
+    transform: none;
+    box-shadow: var(--sncf-shadow);
 }
 
 .app-icon {
@@ -124,7 +133,22 @@ body {
 .app-card h3 {
     margin: 0;
     font-size: 1.1rem;
-    color: #003570;
+    color: var(--sncf-blue-dark);
+}
+
+/* Badge "Bientôt" pour fonctionnalités à venir */
+.badge-soon {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background-color: var(--sncf-pink);
+    color: var(--sncf-white);
+    font-size: 0.65rem;
+    font-weight: bold;
+    padding: 3px 7px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 /* ============================================================================
@@ -135,11 +159,41 @@ body {
     width: 100%;
     height: 75vh;       /* Hauteur dynamique (75% de la fenêtre) */
     max-height: 800px;  /* Limiter l'agrandissement excessif au dézoom */
-    min-height: 400px;  /* Hauteur minimum sur petits écrans */
+    min-height: 400px;
     border-radius: 12px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     background-color: #f8f9fa;
     margin-top: 20px;
+    position: relative;  /* Pour positionner le spinner */
+    overflow: hidden;
+}
+
+/* ----- Spinner de chargement (avant initMap) ----- */
+.map-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: #f8f9fa;
+    color: #666;
+    font-size: 0.95rem;
+    z-index: 10;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 5px solid #e0e0e0;
+    border-top-color: var(--sncf-blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 15px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 
 /* ============================================================================
@@ -148,41 +202,46 @@ body {
 
 .map-legend {
     background-color: var(--sncf-white);
-    padding: 15px 20px;
+    padding: 12px 16px;
     border-radius: 8px;
     box-shadow: var(--sncf-shadow);
-    display: inline-block;
-    margin: 20px;
+    margin: 15px;
+    font-size: 0.9rem;
 }
 
 .map-legend h4 {
     margin: 0 0 10px 0;
-    color: #003570;
-}
-
-/* Élément individuel de la légende */
-.legend-item {
-    display: flex;
-    align-items: center;
-    margin-bottom: 8px;
+    color: var(--sncf-blue-dark);
     font-size: 0.95rem;
 }
 
-/* Point coloré (cercle) pour les gares */
+.map-legend hr {
+    border: 0;
+    border-top: 1px solid #eee;
+    margin: 8px 0;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
 .legend-dot {
     width: 14px;
     height: 14px;
     border-radius: 50%;
     display: inline-block;
     margin-right: 12px;
+    flex-shrink: 0;
 }
 
-/* Ligne de couleur pour les lignes ferroviaires */
 .legend-line {
     width: 25px;
     height: 4px;
     display: inline-block;
     margin-right: 12px;
+    flex-shrink: 0;
 }
 
 /* ============================================================================
@@ -199,7 +258,7 @@ body {
 }
 
 .about-card h2 {
-    color: #003570;
+    color: var(--sncf-blue-dark);
     margin-top: 0;
     border-bottom: 3px solid var(--sncf-blue);
     padding-bottom: 12px;
@@ -230,23 +289,28 @@ body {
         flex-direction: column;
         gap: 15px;
     }
-    
+
     .main-nav ul {
         gap: 15px;
         flex-wrap: wrap;
         justify-content: center;
     }
-    
+
     .main-header .logo {
         font-size: 1.4rem;
     }
 
-    /* Réduire la hauteur de la carte sur mobile */
     #app-container {
-        height: 400px;
+        height: 65vh;
+        min-height: 350px;
     }
-    
+
     .about-card {
         padding: 20px;
+    }
+
+    .map-legend {
+        font-size: 0.8rem;
+        padding: 10px 12px;
     }
 }
