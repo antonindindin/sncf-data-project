@@ -1,0 +1,2 @@
+fonction qui permet un clic sur les trajets intermédiaires entre deux gares :
+ex: mtp clermont -> pouvoir cliquer sur mtp-millau et les autres trajets et pouvoir revenir ensuite à mtp clermont via une flèche retour ou quelque chose de la sorte
