@@ -5,8 +5,11 @@
  * Interface Google Maps pour la visualisation du réseau ferroviaire français,
  * des gares de voyageurs, de la fréquentation, et comparateur de trajets.
  *
- * VERSION 4 : matching trajet ↔ lignes par CODE_LIGNE (exact),
- * remplace l'ancien matching géographique approximatif.
+ * NOTE IMPORTANTE :
+ * Les données ne sont PAS chargées via fetch() — elles sont déclarées en
+ * variables globales par les fichiers reseau.js, gares.js, wifi.js,
+ * frequentation.js, graphe.js (générés par les scripts Python).
+ * Cela permet d'ouvrir index.html directement (file://) sans serveur HTTP.
  */
 
 // ============================================================================
@@ -23,11 +26,6 @@ let reseauDataLoaded = false;
 let reseauVisible = false;
 let ligneSelectionnee = null;
 let listenerClicCarteAttache = false;
-
-// NOUVEAU v4 : ensemble des CODE_LIGNE empruntés par le trajet calculé.
-// Le surlignage compare directement le CODE_LIGNE des features, pas leur
-// géométrie — c'est exact et instantané.
-let codesLignesDuTrajet = new Set();
 
 // ============================================================================
 // SECTION 3 : VARIABLES - DONNÉES GARES
@@ -50,22 +48,14 @@ const cacheWikipedia = new Map();
 // ============================================================================
 let tarifsVisible = false;
 let grapheInitialise = false;
-let indexGares = null;
-let adjacence = null;
-let trajetActuel = null;
+let indexGares = null;     // Map nom_normalisé → indice dans graphe.gares
+let adjacence = null;      // Tableau de listes : adjacence[i] = [{voisin, duree, ...}]
+let trajetActuel = null;   // Polyline + marqueurs du trajet affiché
 
 // ============================================================================
 // SECTION 6 : GESTION RÉSEAU FERRÉ - Styling et Sélection
 // ============================================================================
 
-/**
- * Applique les styles aux lignes du réseau.
- * Quatre modes (par ordre de priorité) :
- *   1. Caché : tout invisible
- *   2. Trajet affiché : lignes du trajet en surbrillance orange
- *   3. Ligne sélectionnée (clic) : focus sur une ligne
- *   4. Normal : couleurs SNCF standards
- */
 function appliquerStyleReseau() {
     reseauData.setStyle(function(feature) {
         if (!reseauVisible) return { visible: false };
@@ -74,31 +64,6 @@ function appliquerStyleReseau() {
         const couleurBase = estLGV ? '#E20074' : '#0055A4';
         const epaisseurBase = estLGV ? 4 : 1.5;
 
-        // ---------- MODE TRAJET AFFICHÉ (v4 : comparaison par CODE_LIGNE) ----------
-        if (codesLignesDuTrajet.size > 0) {
-            const codeLigne = feature.getProperty('CODE_LIGNE');
-            if (codesLignesDuTrajet.has(codeLigne)) {
-                return {
-                    strokeColor: '#FF6B00',
-                    strokeWeight: epaisseurBase + 4,
-                    strokeOpacity: 1.0,
-                    zIndex: 100,
-                    clickable: false,
-                    visible: true
-                };
-            } else {
-                return {
-                    strokeColor: '#BBBBBB',
-                    strokeWeight: epaisseurBase,
-                    strokeOpacity: 0.25,
-                    zIndex: 1,
-                    clickable: false,
-                    visible: true
-                };
-            }
-        }
-
-        // ---------- MODE LIGNE SÉLECTIONNÉE ----------
         if (ligneSelectionnee) {
             if (feature === ligneSelectionnee) {
                 return {
@@ -121,7 +86,6 @@ function appliquerStyleReseau() {
             }
         }
 
-        // ---------- MODE NORMAL ----------
         return {
             strokeColor: couleurBase,
             strokeWeight: epaisseurBase,
@@ -138,9 +102,12 @@ function selectionnerLigne(feature, latLng) {
     appliquerStyleReseau();
 
     const typeLigne = feature.getProperty('CATLIG') || 'Inconnu';
-    const codeLigne = feature.getProperty('CODE_LIGNE');
-    const idLigne = feature.getProperty('LIB_LIGNE') || codeLigne || "Inconnue";
+    const idLigne = feature.getProperty('LIB_LIGNE') || "Inconnue";
     const estLGV = typeLigne === 'Ligne à grande vitesse';
+    
+    // Estimation du tarif/temps : enrichissement avec contexte
+    // Pour une ligne, on n'a pas de paire de gares précise — on indique
+    // simplement les tarifs moyens pour ce type de ligne.
     const categorie = estLGV ? 'TGV' : 'TER/IC';
     const tarifMoyen = estLGV ? '0,18 €/km' : '0,10 à 0,15 €/km';
     const vitesseMoyenne = estLGV ? '~250 km/h' : '~90 km/h';
@@ -173,7 +140,7 @@ function deselectionnerLigne() {
 }
 
 // ============================================================================
-// SECTION 7 : CHARGEMENT DES DONNÉES
+// SECTION 7 : CHARGEMENT DES DONNÉES (depuis variables globales)
 // ============================================================================
 
 function distancePointSegment(px, py, ax, ay, bx, by) {
@@ -199,7 +166,6 @@ function loadLGVLines() {
     if (!listenerClicCarteAttache) {
         map.addListener('click', function(event) {
             if (!reseauVisible) return;
-            if (codesLignesDuTrajet.size > 0) return;
 
             const clicLat = event.latLng.lat();
             const clicLng = event.latLng.lng();
@@ -259,7 +225,7 @@ function loadGares() {
 }
 
 // ============================================================================
-// SECTION 8 : AFFICHAGE GARES
+// SECTION 8 : AFFICHAGE GARES - Viewport Culling & Zoom
 // ============================================================================
 
 function actualiserAffichageGares() {
@@ -409,18 +375,26 @@ function loadFrequentation() {
 }
 
 // ============================================================================
-// SECTION 10 : COMPARATEUR DE TARIFS - Graphe et Dijkstra
+// SECTION 10 : COMPARATEUR DE TARIFS - Init du graphe et algorithme Dijkstra
 // ============================================================================
 
+/**
+ * Normalise un nom de gare pour la comparaison (insensible à la casse,
+ * aux accents, et aux séparateurs).
+ */
 function normaliserNomGare(nom) {
     return nom
         .toLowerCase()
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // retire les accents
         .replace(/[-_'"]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 }
 
+/**
+ * Initialise les structures de données du graphe (une seule fois).
+ * Construit aussi la datalist HTML pour l'autocomplétion.
+ */
 function initialiserGraphe() {
     if (grapheInitialise) return true;
     if (typeof grapheSNCF === 'undefined') {
@@ -428,27 +402,33 @@ function initialiserGraphe() {
         return false;
     }
 
+    // 1. Index par nom (pour la résolution depuis le formulaire)
     indexGares = new Map();
     grapheSNCF.gares.forEach((gare, idx) => {
         indexGares.set(normaliserNomGare(gare.nom), idx);
     });
 
-    // Liste d'adjacence (avec CODE_LIGNE par arête)
+    // 2. Liste d'adjacence (pour Dijkstra)
     adjacence = Array.from({ length: grapheSNCF.gares.length }, () => []);
     grapheSNCF.aretes.forEach(arete => {
         adjacence[arete.a].push({
-            voisin: arete.b, duree: arete.duree, distance: arete.distance,
-            cat: arete.cat, code_ligne: arete.code_ligne
+            voisin: arete.b,
+            duree: arete.duree,
+            distance: arete.distance,
+            cat: arete.cat
         });
         adjacence[arete.b].push({
-            voisin: arete.a, duree: arete.duree, distance: arete.distance,
-            cat: arete.cat, code_ligne: arete.code_ligne
+            voisin: arete.a,
+            duree: arete.duree,
+            distance: arete.distance,
+            cat: arete.cat
         });
     });
 
-    // Datalist HTML pour l'autocomplétion
+    // 3. Remplir la datalist HTML pour l'autocomplétion
     const datalist = document.getElementById('liste-gares');
     if (datalist) {
+        // On trie alphabétiquement pour le confort
         const nomsTries = grapheSNCF.gares.map(g => g.nom).sort();
         datalist.innerHTML = nomsTries.map(n => `<option value="${n.replace(/"/g, '&quot;')}">`).join('');
     }
@@ -458,10 +438,21 @@ function initialiserGraphe() {
     return true;
 }
 
+/**
+ * Trouve l'indice de la gare correspondant à un nom (recherche tolérante).
+ * Renvoie -1 si rien trouvé.
+ */
 function trouverGare(nomSaisi) {
     if (!nomSaisi || !nomSaisi.trim()) return -1;
     const norm = normaliserNomGare(nomSaisi);
+    
+    // Match exact d'abord
     if (indexGares.has(norm)) return indexGares.get(norm);
+    
+    // Sinon, recherche par préfixe / inclusion
+    for (const [cle, idx] of indexGares.entries()) {
+        if (cle === norm) return idx;
+    }
     for (const [cle, idx] of indexGares.entries()) {
         if (cle.startsWith(norm)) return idx;
     }
@@ -471,6 +462,15 @@ function trouverGare(nomSaisi) {
     return -1;
 }
 
+/**
+ * Algorithme de Dijkstra : plus court chemin (en minutes) de "depart" à "arrivee".
+ * Retourne { chemin: [idx, idx, ...], dureeTotale, segments: [{de, vers, duree, distance, cat}, ...] }
+ * ou null si pas de chemin.
+ *
+ * Pour des graphes de cette taille (~6000 nœuds, ~10000 arêtes), une simple file
+ * de priorité naïve (tri à chaque itération) serait trop lente. On utilise un
+ * tas binaire (binary heap) maison.
+ */
 function dijkstra(depart, arrivee) {
     const n = grapheSNCF.gares.length;
     const distances = new Float64Array(n).fill(Infinity);
@@ -479,6 +479,8 @@ function dijkstra(depart, arrivee) {
     const visite = new Uint8Array(n);
 
     distances[depart] = 0;
+    
+    // Tas binaire min-heap : tableau [duree, indiceGare, duree, indiceGare, ...]
     const heap = new MinHeap();
     heap.push(0, depart);
 
@@ -503,6 +505,7 @@ function dijkstra(depart, arrivee) {
 
     if (distances[arrivee] === Infinity) return null;
 
+    // Reconstruction du chemin
     const chemin = [];
     const segments = [];
     let u = arrivee;
@@ -514,8 +517,7 @@ function dijkstra(depart, arrivee) {
                 vers: u,
                 duree: segmentVersPred[u].duree,
                 distance: segmentVersPred[u].distance,
-                cat: segmentVersPred[u].cat,
-                code_ligne: segmentVersPred[u].code_ligne,
+                cat: segmentVersPred[u].cat
             });
         }
         u = predecesseur[u];
@@ -523,6 +525,10 @@ function dijkstra(depart, arrivee) {
     return { chemin, dureeTotale: distances[arrivee], segments };
 }
 
+/**
+ * Tas binaire min-heap (priorité = première valeur).
+ * Implementation simple en tableau plat pour performance.
+ */
 class MinHeap {
     constructor() { this.data = []; }
     size() { return this.data.length; }
@@ -588,15 +594,9 @@ function calculerTrajet() {
         return;
     }
 
-    // On active automatiquement l'affichage du réseau pour pouvoir surligner
-    if (!reseauVisible) {
-        reseauVisible = true;
-        basculerBouton('reseau', true);
-        loadLGVLines();
-    }
-
     resultat.innerHTML = `<div class="resultat-loading">Calcul en cours…</div>`;
 
+    // Petit délai pour laisser le navigateur peindre l'écran avant le calcul
     setTimeout(() => {
         const t0 = performance.now();
         const trajet = dijkstra(idxDep, idxArr);
@@ -608,7 +608,7 @@ function calculerTrajet() {
         }
 
         afficherResultatTrajet(trajet, idxDep, idxArr, tCalc);
-        afficherTrajetSurCarte(trajet);
+        tracerTrajetSurCarte(trajet);
     }, 50);
 }
 
@@ -616,17 +616,19 @@ function afficherResultatTrajet(trajet, idxDep, idxArr, tCalc) {
     const resultat = document.getElementById('tarifs-resultat');
     const tarifsKm = grapheSNCF.tarifs_km;
 
+    // Calcul du prix total et de la distance totale
     let distanceTotale = 0;
     let prixTotal = 0;
     const categoriesUtilisees = new Set();
-    const lignesUtilisees = new Set();
     trajet.segments.forEach(seg => {
         distanceTotale += seg.distance;
         prixTotal += seg.distance * tarifsKm[seg.cat];
         categoriesUtilisees.add(seg.cat);
-        if (seg.code_ligne) lignesUtilisees.add(seg.code_ligne);
     });
 
+    // Détection des correspondances (changement de catégorie ou nœud
+    // avec degré 3+ traversé) — version simplifiée : on signale les
+    // changements de catégorie
     const correspondances = [];
     for (let i = 1; i < trajet.segments.length; i++) {
         if (trajet.segments[i].cat !== trajet.segments[i - 1].cat) {
@@ -641,30 +643,17 @@ function afficherResultatTrajet(trajet, idxDep, idxArr, tCalc) {
     const gareDep = grapheSNCF.gares[idxDep].nom;
     const gareArr = grapheSNCF.gares[idxArr].nom;
 
-    // NOUVEAU v4 : afficher les CODE_LIGNE empruntés dans le détail de chaque segment
-    const detailsHTML = trajet.segments.map(seg => {
+    const detailsHTML = trajet.segments.map((seg, i) => {
         const nomDe = grapheSNCF.gares[seg.de].nom;
         const nomVers = grapheSNCF.gares[seg.vers].nom;
-        const badgeLigne = seg.code_ligne
-            ? `<span class="segment-ligne" title="Ligne ${seg.code_ligne}">L. ${seg.code_ligne}</span>`
-            : `<span class="segment-ligne segment-ligne-inconnue" title="Ligne non identifiée">L. ?</span>`;
         return `
             <div class="segment-trajet">
                 <span class="segment-cat segment-cat-${seg.cat}">${seg.cat}</span>
                 <span class="segment-trajet-noms">${nomDe} → ${nomVers}</span>
-                ${badgeLigne}
                 <span class="segment-trajet-info">${Math.round(seg.duree)} min · ${seg.distance.toFixed(0)} km</span>
             </div>
         `;
     }).join('');
-
-    // NOUVEAU v4 : récapitulatif des lignes empruntées
-    const recapLignes = lignesUtilisees.size > 0
-        ? `<div class="resultat-lignes">
-             <strong>Lignes empruntées (${lignesUtilisees.size}) :</strong>
-             ${[...lignesUtilisees].sort().map(c => `<span class="badge-ligne">${c}</span>`).join('')}
-           </div>`
-        : '';
 
     resultat.innerHTML = `
         <div class="resultat-trajet">
@@ -690,7 +679,6 @@ function afficherResultatTrajet(trajet, idxDep, idxArr, tCalc) {
                     <span class="chiffre-valeur">${correspondances.length}</span>
                 </div>
             </div>
-            ${recapLignes}
             <details class="resultat-details">
                 <summary>Détail du trajet (${trajet.segments.length} segments)</summary>
                 <div class="segments-liste">${detailsHTML}</div>
@@ -703,78 +691,71 @@ function afficherResultatTrajet(trajet, idxDep, idxArr, tCalc) {
     `;
 }
 
-/**
- * Affiche le trajet sur la carte :
- *   - Surligne en orange les lignes du réseau ayant un CODE_LIGNE emprunté
- *   - Pose deux marqueurs A (départ) et B (arrivée)
- *   - Recadre la carte sur le trajet
- */
-function afficherTrajetSurCarte(trajet) {
+function tracerTrajetSurCarte(trajet) {
+    // Nettoyer le trajet précédent
     effacerTrajetSurCarte();
 
-    // Collecter les CODE_LIGNE empruntés par le trajet
-    codesLignesDuTrajet = new Set();
-    trajet.segments.forEach(seg => {
-        if (seg.code_ligne !== null && seg.code_ligne !== undefined) {
-            codesLignesDuTrajet.add(seg.code_ligne);
-        }
+    const coords = trajet.chemin.map(idx => {
+        const g = grapheSNCF.gares[idx];
+        return { lat: g.lat, lng: g.lon };
     });
-    console.log(`✓ Trajet utilise ${codesLignesDuTrajet.size} ligne(s) distincte(s) :`, [...codesLignesDuTrajet]);
 
-    // Réappliquer le style du réseau → surlignage des lignes empruntées
-    if (reseauDataLoaded) appliquerStyleReseau();
+    const polyline = new google.maps.Polyline({
+        path: coords,
+        geodesic: true,
+        strokeColor: '#FF6B00',
+        strokeOpacity: 0.9,
+        strokeWeight: 5,
+        zIndex: 200,
+        map: map
+    });
 
     // Marqueurs aux extrémités
-    const idxDepart = trajet.chemin[0];
-    const idxArrivee = trajet.chemin[trajet.chemin.length - 1];
-    const gareDep = grapheSNCF.gares[idxDepart];
-    const gareArr = grapheSNCF.gares[idxArrivee];
-
     const markerDep = new google.maps.Marker({
-        position: { lat: gareDep.lat, lng: gareDep.lon },
+        position: coords[0],
         map: map,
-        title: gareDep.nom + ' (Départ)',
+        title: grapheSNCF.gares[trajet.chemin[0]].nom + ' (Départ)',
         label: { text: 'A', color: 'white', fontWeight: 'bold' },
         icon: {
             path: google.maps.SymbolPath.CIRCLE,
-            scale: 14, fillColor: '#28a745', fillOpacity: 1,
-            strokeColor: '#FFFFFF', strokeWeight: 2
+            scale: 14,
+            fillColor: '#28a745',
+            fillOpacity: 1,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 2
         },
         zIndex: 300
     });
     const markerArr = new google.maps.Marker({
-        position: { lat: gareArr.lat, lng: gareArr.lon },
+        position: coords[coords.length - 1],
         map: map,
-        title: gareArr.nom + ' (Arrivée)',
+        title: grapheSNCF.gares[trajet.chemin[trajet.chemin.length - 1]].nom + ' (Arrivée)',
         label: { text: 'B', color: 'white', fontWeight: 'bold' },
         icon: {
             path: google.maps.SymbolPath.CIRCLE,
-            scale: 14, fillColor: '#dc3545', fillOpacity: 1,
-            strokeColor: '#FFFFFF', strokeWeight: 2
+            scale: 14,
+            fillColor: '#dc3545',
+            fillOpacity: 1,
+            strokeColor: '#FFFFFF',
+            strokeWeight: 2
         },
         zIndex: 300
     });
 
-    trajetActuel = { markerDep, markerArr };
+    trajetActuel = { polyline, markerDep, markerArr };
 
-    // Recadrer la carte
+    // Centrer la carte sur le trajet
     const bounds = new google.maps.LatLngBounds();
-    trajet.chemin.forEach(idx => {
-        const g = grapheSNCF.gares[idx];
-        bounds.extend({ lat: g.lat, lng: g.lon });
-    });
+    coords.forEach(c => bounds.extend(c));
     map.fitBounds(bounds, 80);
 }
 
 function effacerTrajetSurCarte() {
     if (trajetActuel) {
+        trajetActuel.polyline.setMap(null);
         trajetActuel.markerDep.setMap(null);
         trajetActuel.markerArr.setMap(null);
         trajetActuel = null;
-    }
-    if (codesLignesDuTrajet.size > 0) {
-        codesLignesDuTrajet = new Set();
-        if (reseauDataLoaded) appliquerStyleReseau();
     }
 }
 
@@ -825,7 +806,10 @@ function basculerBouton(appName, estActif) {
 }
 
 function loadApp(appName) {
-    if (!map) return;
+    if (!map) {
+        console.warn("La carte n'est pas encore prête.");
+        return;
+    }
     if (infoWindow) infoWindow.close();
 
     if (appName === 'gares') {
