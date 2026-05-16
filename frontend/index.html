@@ -20,7 +20,6 @@
         </header>
 
         <main class="main-content">
-            <!-- ============== VUE PRINCIPALE (CARTE) ============== -->
             <div id="dashboard-view">
                 <div class="apps-grid">
                     <div id="btn-gares" class="app-card" onclick="loadApp('gares')">
@@ -39,35 +38,93 @@
                         <span class="app-icon">💶</span>
                         <h3>Comparateur Tarifs</h3>
                     </div>
+                    <div id="btn-isochrone" class="app-card" onclick="loadApp('isochrone')">
+                        <span class="app-icon">🕐</span>
+                        <h3>Isochrone Train</h3>
+                    </div>
                 </div>
 
-                <!-- ----- Panneau du comparateur de tarifs (caché par défaut) ----- -->
-                <div id="tarifs-panel" class="tarifs-panel" style="display: none;">
+                <div id="gares-panel" class="gares-panel" style="display:none;">
+                    <h3>🏛️ Affichage des gares</h3>
+                    <div class="isochrone-form">
+                        <div class="isochrone-field">
+                            <label for="filtre-gares-select">Filtrer par type de trafic</label>
+                            <select id="filtre-gares-select" onchange="mettreAJourFiltreGares()">
+                                <option value="toutes">Toutes les gares</option>
+                                <option value="tgv">Gares Nationales / TGV uniquement</option>
+                                <option value="ter">Gares Régionales / TER uniquement</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tarifs-panel" class="tarifs-panel" style="display:none;">
                     <h3>Comparateur de trajets</h3>
                     <div class="tarifs-form">
                         <div class="tarifs-field">
                             <label for="gare-depart">Gare de départ</label>
-                            <input type="text" id="gare-depart" 
-                                   list="liste-gares" autocomplete="off"
-                                   placeholder="Ex : Paris Gare de Lyon">
+                            <input type="text" id="gare-depart" list="liste-gares" autocomplete="off" placeholder="Ex : Paris Gare de Lyon">
                         </div>
                         <div class="tarifs-arrow">→</div>
                         <div class="tarifs-field">
                             <label for="gare-arrivee">Gare d'arrivée</label>
-                            <input type="text" id="gare-arrivee"
-                                   list="liste-gares" autocomplete="off"
-                                   placeholder="Ex : Marseille Saint-Charles">
+                            <input type="text" id="gare-arrivee" list="liste-gares" autocomplete="off" placeholder="Ex : Marseille Saint-Charles">
                         </div>
-                        <button id="btn-calculer-trajet" onclick="calculerTrajet()">
-                            Calculer
-                        </button>
+                        <button id="btn-calculer-trajet" onclick="calculerTrajet()">Calculer</button>
                     </div>
                     <datalist id="liste-gares"></datalist>
-                    
                     <div id="tarifs-resultat" class="tarifs-resultat"></div>
                 </div>
 
-                <!-- Conteneur de la carte Google Maps -->
+                <div id="isochrone-panel" class="isochrone-panel" style="display:none;">
+                    <h3>🕐 Où peut-on aller en train ?</h3>
+                    <p class="isochrone-description">
+                        Sélectionne une gare de départ, puis ajuste le curseur pour voir toutes les destinations accessibles en train en France selon le temps de trajet.
+                    </p>
+
+                    <div class="isochrone-form">
+                        <div class="isochrone-field">
+                            <label for="isochrone-gare-select">Gare de départ</label>
+                            <select id="isochrone-gare-select" onchange="mettreAJourIsochrone()">
+                                <option value="">— Choisir une gare —</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="isochrone-curseur-container">
+                        <div class="isochrone-curseur-header">
+                            <span class="isochrone-curseur-label">Temps de trajet max :</span>
+                            <span id="isochrone-label-temps" class="isochrone-temps-valeur">5h</span>
+                        </div>
+                        <div class="isochrone-curseur-track">
+                            <input type="range" id="isochrone-curseur"
+                                   min="30" max="900" step="15" value="300"
+                                   oninput="mettreAJourIsochrone()"
+                                   class="isochrone-slider">
+                            <div class="isochrone-curseur-marks">
+                                <span>30 min</span>
+                                <span>2h</span>
+                                <span>5h</span>
+                                <span>8h</span>
+                                <span>15h</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="isochrone-legende">
+                        <div class="isochrone-legende-gradient"></div>
+                        <div class="isochrone-legende-labels">
+                            <span>&lt; 1h</span>
+                            <span>2h</span>
+                            <span>5h</span>
+                            <span>8h</span>
+                            <span>&gt; 10h</span>
+                        </div>
+                    </div>
+
+                    <div id="isochrone-nb-gares" class="isochrone-stats"></div>
+                </div>
+
                 <div id="app-container">
                     <div id="map-loading" class="map-loading">
                         <div class="spinner"></div>
@@ -75,8 +132,7 @@
                     </div>
                 </div>
 
-                <!-- Légende -->
-                <div id="map-legend" class="map-legend" style="display: none;">
+                <div id="map-legend" class="map-legend" style="display:none;">
                     <h4>Légende</h4>
                     <div class="legend-item"><span class="legend-dot" style="background:#E20074;"></span>Gare Nationale / TGV</div>
                     <div class="legend-item"><span class="legend-dot" style="background:#0088CE;"></span>Gare Régionale</div>
@@ -87,57 +143,38 @@
                 </div>
             </div>
 
-            <!-- ============== VUE "À PROPOS" ============== -->
-            <div id="about-view" class="about-card" style="display: none;">
+            <div id="about-view" class="about-card" style="display:none;">
                 <h2>À Propos du SNCF DataHub</h2>
                 <p>Bienvenue sur le SNCF DataHub, une plateforme interactive permettant de visualiser, d'explorer et d'analyser les données ouvertes (Open Data) relatives au réseau ferroviaire français.</p>
-                
                 <h3>L'Auteur</h3>
                 <p>Ce projet d'interface cartographique et d'analyse de données est développé par un étudiant en 3ᵉ année de Licence (CPES Modélisation et Numérique en Sciences de la Matière à Montpellier).</p>
-                
                 <h3>Sources des Données</h3>
                 <ul>
                     <li><strong>Gares et Villes :</strong> Localisation et segmentation des gares de voyageurs (SNCF Réseau).</li>
                     <li><strong>Réseau Ferré :</strong> Tracé géographique des lignes classiques et des Lignes à Grande Vitesse (LGV).</li>
                     <li><strong>Fréquentation :</strong> Données annuelles estimées des voyageurs par gare.</li>
-                    <li><strong>Horaires (GTFS) :</strong> Plan de transport théorique TGV, Intercités et TER, mis à disposition par SNCF Voyageurs via transport.data.gouv.fr.</li>
+                    <li><strong>Horaires (GTFS) :</strong> Plan de transport théorique TGV, Intercités et TER.</li>
                 </ul>
-                
-                <h3>Méthodologie du Comparateur</h3>
-                <p>Les <strong>temps de trajet</strong> sont calculés à partir des horaires théoriques GTFS officiels (moyenne des durées observées entre deux gares adjacentes, toutes circulations confondues).</p>
-                <p>Les <strong>tarifs</strong> sont des <em>estimations</em> obtenues en multipliant la distance ferroviaire par un prix moyen au kilomètre selon la catégorie de service :</p>
-                <ul>
-                    <li>TGV / OUIGO : 0,18 €/km</li>
-                    <li>Intercités : 0,15 €/km</li>
-                    <li>TER : 0,10 €/km</li>
-                </ul>
-                <p>Les tarifs réels pratiqués par SNCF Connect varient fortement selon la date, l'anticipation, la classe et les cartes de réduction, et ne sont pas accessibles en open data.</p>
-                <p>L'algorithme de recherche d'itinéraire utilise <strong>Dijkstra</strong> pour trouver le plus court chemin en durée totale dans le graphe des gares.</p>
-                
+                <h3>Méthodologie</h3>
+                <p><strong>Isochrone ferroviaire :</strong> algorithme de Dijkstra depuis une source unique sur le graphe des gares GTFS. Le calcul est effectué une seule fois, le curseur filtre et recolorie le résultat en mémoire sans recalcul.</p>
+                <p><strong>Comparateur de tarifs :</strong> Dijkstra point à point, temps de trajet depuis les horaires GTFS, tarifs estimés au km selon la catégorie de service.</p>
                 <h3>Technologies Utilisées</h3>
                 <ul>
                     <li><strong>Interface :</strong> HTML5, CSS3, Vanilla JavaScript.</li>
-                    <li><strong>Cartographie :</strong> Google Maps JavaScript API (incluant les bibliothèques Data et Visualization).</li>
-                    <li><strong>Traitement des données :</strong> Python (parsing GTFS hors-ligne).</li>
-                    <li><strong>Enrichissement :</strong> API REST de Wikipédia pour la récupération dynamique des images.</li>
+                    <li><strong>Cartographie :</strong> Google Maps JavaScript API.</li>
+                    <li><strong>Traitement des données :</strong> Python (GTFS + réseau ferré).</li>
+                    <li><strong>Enrichissement :</strong> API REST de Wikipédia pour les images de gares.</li>
                 </ul>
             </div>
         </main>
     </div>
 
-    <!-- ============== DONNÉES (chargées en variables globales) ============== -->
     <script src="reseau.js"></script>
     <script src="gares.js"></script>
     <script src="wifi.js"></script>
     <script src="frequentation.js"></script>
     <script src="graphe.js"></script>
-    
-    <!-- Logique applicative -->
     <script src="script.js"></script>
-    
-    <!-- API Google Maps (callback initMap déclenché à la fin du chargement) -->
-    <script async
-        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap&libraries=visualization">
-    </script>
+    <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap&libraries=visualization"></script>
 </body>
 </html>
