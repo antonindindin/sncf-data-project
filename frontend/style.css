@@ -1,7 +1,11 @@
 /**
  * ============================================================================
- * SNCF DATA PROJECT - FEUILLE DE STYLES (v9 — avec Isochrone)
+ * SNCF DATA PROJECT - FEUILLE DE STYLES (v11 — curseur isochrone cohérent)
  * ============================================================================
+ * Les barres .isochrone-slider et .isochrone-legende-gradient utilisent
+ * EXACTEMENT le même gradient, calé sur la fonction couleurIsochrone()
+ * du script.js (ancres 30min/2h/5h/8h/12h/15h aux positions
+ * 0% / 10.34% / 31.03% / 51.72% / 79.31% / 100%).
  */
 
 :root {
@@ -12,6 +16,15 @@
     --bg-color: #F4F6F9;
     --text-color: #333333;
     --sncf-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    /* Gradient unique partagé par le curseur ET la légende */
+    --isochrone-gradient: linear-gradient(to right,
+        rgb(30,200,70) 0%,
+        rgb(120,200,30) 10.34%,
+        rgb(255,180,0) 31.03%,
+        rgb(255,90,0) 51.72%,
+        rgb(213,0,0) 79.31%,
+        rgb(140,0,0) 100%
+    );
 }
 
 body {
@@ -79,7 +92,6 @@ body {
 .app-card.active { border-color: var(--sncf-blue); background-color: #e6f3fb; }
 .app-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; }
 .app-card h3 { margin: 0; font-size: 1.1rem; color: var(--sncf-blue-dark); }
-
 
 /* ============================================================ GARES PANEL */
 
@@ -168,7 +180,7 @@ body {
     border-radius: 10px;
     box-shadow: var(--sncf-shadow);
     margin-bottom: 20px;
-    border-left: 5px solid #00C853; /* vert (couleur < 2h) */
+    border-left: 5px solid rgb(30,200,70);
 }
 
 .isochrone-panel h3 { margin: 0 0 8px 0; color: var(--sncf-blue-dark); font-size: 1.3rem; }
@@ -216,9 +228,7 @@ body {
 
 /* ----- Curseur ----- */
 
-.isochrone-curseur-container {
-    margin-bottom: 16px;
-}
+.isochrone-curseur-container { margin-bottom: 20px; }
 
 .isochrone-curseur-header {
     display: flex;
@@ -247,14 +257,8 @@ body {
     border-radius: 4px;
     outline: none;
     cursor: pointer;
-    /* Gradient de la piste : vert → orange → rouge (suit la même logique de couleur) */
-    background: linear-gradient(to right,
-        #00C853 0%,
-        #00C853 13%,    /* 2h / 15h ≈ 13% */
-        #FF6D00 33%,    /* 5h / 15h ≈ 33% */
-        #D50000 67%,    /* 10h / 15h ≈ 67% */
-        #7B0000 100%
-    );
+    /* MÊME gradient que la légende (variable partagée) */
+    background: var(--isochrone-gradient);
 }
 
 .isochrone-slider::-webkit-slider-thumb {
@@ -278,37 +282,47 @@ body {
     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 
+/* Les marques du curseur sont positionnées en absolu aux bons % */
 .isochrone-curseur-marks {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 6px;
+    position: relative;
+    height: 1.1em;
+    margin-top: 8px;
     font-size: 0.75rem;
     color: #888;
 }
+.isochrone-curseur-marks span {
+    position: absolute;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+.isochrone-curseur-marks span:first-child { transform: translateX(0); }
+.isochrone-curseur-marks span:last-child  { transform: translateX(-100%); }
 
 /* ----- Légende des couleurs ----- */
 
-.isochrone-legende { margin-bottom: 12px; }
+.isochrone-legende { margin-bottom: 14px; }
 
 .isochrone-legende-gradient {
     height: 10px;
     border-radius: 5px;
-    background: linear-gradient(to right,
-        #00C853,
-        #AEEA00,
-        #FF6D00,
-        #FF1744,
-        #D50000
-    );
+    /* STRICTEMENT le même gradient que le curseur */
+    background: var(--isochrone-gradient);
     margin-bottom: 4px;
 }
 
 .isochrone-legende-labels {
-    display: flex;
-    justify-content: space-between;
+    position: relative;
+    height: 1.1em;
     font-size: 0.75rem;
     color: #666;
 }
+.isochrone-legende-labels span {
+    position: absolute;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+.isochrone-legende-labels span:first-child { transform: translateX(0); }
+.isochrone-legende-labels span:last-child  { transform: translateX(-100%); }
 
 /* ----- Stats ----- */
 

@@ -1,13 +1,13 @@
 /**
  * ============================================================================
- * SNCF DATA PROJECT - MODULE CARTOGRAPHIQUE INTERACTIF (v10)
+ * SNCF DATA PROJECT - MODULE CARTOGRAPHIQUE INTERACTIF (v11)
  * ============================================================================
  * Isochrone ferroviaire :
- * - Seules les grandes gares (Segment A du GeoJSON) affichées comme marqueurs
- * - Pas de marqueurs aux gares ordinaires (trop de points, peu utile)
+ * - Seules les grandes gares (Segment A du GeoJSON) comptées dans les stats
  * - Les traces sont clippées à la bbox France (plus de débordement en Italie)
  * - Curseur interactif sans recalcul (Dijkstra source unique en cache)
- * - Gradient vert (<2h) → orange (5h) → rouge (>10h)
+ * - couleurIsochrone() = rampe CONTINUE strictement alignée sur le gradient
+ *   CSS du curseur et de la légende (ancres 0/120/300/480/720/900 min).
  */
 
 // ============================================================================
@@ -16,62 +16,48 @@
 let map;
 let infoWindow;
 
-// Réseau ferré
 let reseauData;
 let reseauDataLoaded = false;
 let reseauVisible = false;
 let ligneSelectionnee = null;
 let listenerClicCarteAttache = false;
 
-// Gares
 let toutesLesGares = [];
 let marqueursAffiches = [];
 let garesDataLoaded = false;
 let garesVisible = false;
-let filtreGaresType = 'toutes'; // 'toutes', 'tgv', 'ter'
+let filtreGaresType = 'toutes';
 
-// Complémentaires
 let wifiSet = null;
 let heatmap = null;
 let frequentationVisible = false;
 const cacheWikipedia = new Map();
 
-// Comparateur
 let tarifsVisible = false;
 let grapheInitialise = false;
 let indexGares = null;
 let adjacence = null;
 let trajetActuel = null;
 
-// Isochrone
 let isochroneVisible = false;
 let isochroneResultat = null;
 let isochroneGareSource = -1;
 let isochronePolylines = [];
 let isochroneMarqueurs = [];
 
-// Set des indices GTFS correspondant aux grandes gares (Segment A)
-// Construit une seule fois lors du premier initialiserGraphe()
 let grandesGaresIdx = null;
 
-// Bbox stricte France métropolitaine + Corse (on coupe tout ce qui sort)
 const FRANCE_BBOX = { latMin: 41.0, latMax: 51.5, lngMin: -5.5, lngMax: 9.5 };
 
 // ============================================================================
 // SECTION 2 : UTILITAIRES
 // ============================================================================
 
-/** Renvoie true si un point lat/lng est dans la bbox France */
 function dansLaFrance(lat, lng) {
     return lat >= FRANCE_BBOX.latMin && lat <= FRANCE_BBOX.latMax &&
            lng >= FRANCE_BBOX.lngMin && lng <= FRANCE_BBOX.lngMax;
 }
 
-/**
- * Filtre une liste de points [[lat,lng],...] pour ne garder que les segments
- * entièrement dans la bbox France. Renvoie une liste de sous-polylines
- * continues (pour gérer les cas où on entre/sort de France).
- */
 function clipperEnFrance(points) {
     if (!points || points.length === 0) return [];
     const segments = [];
@@ -88,12 +74,10 @@ function clipperEnFrance(points) {
     return segments;
 }
 
-/** Distance approchée entre deux points GPS (degrés, suffisant pour comparer) */
 function distDeg(lat1, lng1, lat2, lng2) {
     return Math.hypot(lat1 - lat2, lng1 - lng2);
 }
 
-/** Formatte des minutes en "Xh YYmin" */
 function formatMinutes(min) {
     const h = Math.floor(min / 60), m = Math.round(min % 60);
     if (h === 0) return `${m} min`;
@@ -220,20 +204,17 @@ function actualiserAffichageGares() {
     const z = map.getZoom(), lim = map.getBounds();
     if (!lim) return;
     marqueursAffiches.forEach(m => m.setMap(null)); marqueursAffiches = [];
-    
+
     toutesLesGares.forEach(feature => {
         const c = feature.geometry.coordinates, p = feature.properties;
         const seg = p['Segment(s) DRG'];
-        
-        // Filtre selon le choix de l'utilisateur
+
         if (filtreGaresType === 'tgv' && seg !== 'A') return;
         if (filtreGaresType === 'ter' && seg === 'A') return;
 
         const pos = new google.maps.LatLng(c[1], c[0]);
         if (!lim.contains(pos)) return;
-        
-        // Ajustement de la performance selon le niveau de zoom
-        // On permet de voir plus de TER si l'utilisateur demande explicitement les TER
+
         if (filtreGaresType === 'toutes') {
             if (z < 8 && seg !== 'A') return;
             if (z < 11 && seg === 'C') return;
@@ -312,11 +293,6 @@ function normaliserNomGare(nom) {
     return nom.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-_'"]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-/**
- * Construit le Set des indices GTFS correspondant aux grandes gares (Segment A).
- * Matching par proximité géographique : pour chaque gare Segment A du GeoJSON,
- * on trouve la gare GTFS la plus proche (distance < 0.5 km).
- */
 function construireGrandesGares() {
     if (grandesGaresIdx !== null) return;
     grandesGaresIdx = new Set();
@@ -326,7 +302,7 @@ function construireGrandesGares() {
         .filter(f => f.properties['Segment(s) DRG'] === 'A')
         .map(f => ({ lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], nom: f.properties['Nom'] }));
 
-    const SEUIL_DEG = 0.015; // ≈ 1.5 km
+    const SEUIL_DEG = 0.015;
     grapheSNCF.gares.forEach((gGtfs, idx) => {
         for (const gA of garesSegA) {
             if (distDeg(gGtfs.lat, gGtfs.lon, gA.lat, gA.lng) < SEUIL_DEG) {
@@ -449,18 +425,43 @@ class MinHeap {
 // SECTION 7 : ISOCHRONE — couleur et affichage
 // ============================================================================
 
+/**
+ * Rampe de couleur CONTINUE, STRICTEMENT alignée sur le gradient CSS
+ * (--isochrone-gradient dans style.css). Ancres (minutes → RGB) :
+ *   0   → vert vif      (30,200,70)
+ *   120 → vert-jaune    (120,200,30)
+ *   300 → jaune-orangé  (255,180,0)
+ *   480 → orange vif    (255,90,0)
+ *   720 → rouge         (213,0,0)
+ *   900 → rouge foncé   (140,0,0)
+ */
 function couleurIsochrone(minutes) {
+    const ancres = [
+        [0,   [30, 200, 70]],
+        [120, [120, 200, 30]],
+        [300, [255, 180, 0]],
+        [480, [255, 90, 0]],
+        [720, [213, 0, 0]],
+        [900, [140, 0, 0]]
+    ];
     const lerp = (a, b, t) => Math.round(a + (b - a) * t);
-    if (minutes <= 120) {
-        return '#00C853';
-    } else if (minutes <= 300) {
-        const t = (minutes - 120) / 180;
-        return `rgb(${lerp(0, 255, t)},${lerp(200, 109, t)},${lerp(83, 0, t)})`;
-    } else if (minutes <= 600) {
-        const t = (minutes - 300) / 300;
-        return `rgb(${lerp(255, 213, t)},${lerp(109, 0, t)},0)`;
+    if (minutes <= ancres[0][0]) {
+        const c = ancres[0][1];
+        return `rgb(${c[0]},${c[1]},${c[2]})`;
     }
-    return '#D50000';
+    if (minutes >= ancres[ancres.length - 1][0]) {
+        const c = ancres[ancres.length - 1][1];
+        return `rgb(${c[0]},${c[1]},${c[2]})`;
+    }
+    for (let i = 0; i < ancres.length - 1; i++) {
+        const [m0, c0] = ancres[i];
+        const [m1, c1] = ancres[i + 1];
+        if (minutes >= m0 && minutes <= m1) {
+            const t = (minutes - m0) / (m1 - m0);
+            return `rgb(${lerp(c0[0], c1[0], t)},${lerp(c0[1], c1[1], t)},${lerp(c0[2], c1[2], t)})`;
+        }
+    }
+    return 'rgb(140,0,0)';
 }
 
 function afficherIsochrone(idxSource, maxMinutes) {
@@ -490,7 +491,7 @@ function afficherIsochrone(idxSource, maxMinutes) {
             const cle = Math.min(pred[u], u) + '_' + Math.max(pred[u], u);
             if (!aretesDessinees.has(cle)) {
                 aretesDessinees.add(cle);
-                
+
                 if (ar.trace && ar.trace.length >= 2) {
                     const avgSegmentLength = ar.distance / (ar.trace.length - 1);
                     if (avgSegmentLength <= 4.0) {
@@ -612,10 +613,10 @@ function afficherTrajetSurCarte(trajet) {
     const polys = [];
     trajet.segments.forEach(seg => {
         if (!seg.trace || seg.trace.length < 2) return;
-        
+
         const avgSegmentLength = seg.distance / (seg.trace.length - 1);
         if (avgSegmentLength > 4.0) return;
-        
+
         let pts = seg.trace.map(c => ({ lat: c[0], lng: c[1] }));
         if (seg.sens === -1) pts = pts.slice().reverse();
         const clipped = clipperEnFrance(pts.map(p => [p.lat, p.lng]));
@@ -669,31 +670,28 @@ function basculerBouton(appName, estActif) {
 function loadApp(appName) {
     if (!map) return;
     if (infoWindow) infoWindow.close();
-    
+
     if (appName === 'gares') {
-        garesVisible = !garesVisible; 
+        garesVisible = !garesVisible;
         basculerBouton('gares', garesVisible);
-        
-        // Affichage du panneau des gares
         const panel = document.getElementById('gares-panel');
         if (panel) panel.style.display = garesVisible ? 'block' : 'none';
-
-        if (garesVisible && !garesDataLoaded) loadGares(); 
+        if (garesVisible && !garesDataLoaded) loadGares();
         else actualiserAffichageGares();
-    } 
+    }
     else if (appName === 'reseau') {
         reseauVisible = !reseauVisible; basculerBouton('reseau', reseauVisible);
         loadLGVLines(); if (!reseauVisible) deselectionnerLigne();
-    } 
+    }
     else if (appName === 'frequentation') {
         frequentationVisible = !frequentationVisible; basculerBouton('frequentation', frequentationVisible);
         loadFrequentation();
-    } 
+    }
     else if (appName === 'tarifs') {
         tarifsVisible = !tarifsVisible; basculerBouton('tarifs', tarifsVisible);
         document.getElementById('tarifs-panel').style.display = tarifsVisible ? 'block' : 'none';
         if (tarifsVisible) initialiserGraphe(); else effacerTrajetSurCarte();
-    } 
+    }
     else if (appName === 'isochrone') {
         isochroneVisible = !isochroneVisible; basculerBouton('isochrone', isochroneVisible);
         document.getElementById('isochrone-panel').style.display = isochroneVisible ? 'block' : 'none';
