@@ -10,19 +10,11 @@
  *   CSS du curseur et de la légende (ancres 0/120/300/480/720/900 min).
  */
 
-<<<<<<< HEAD
-// === RESEAU FERRE (Lignes) ===
-let reseauData; 
-let reseauDataLoaded = false; 
-let reseauVisible = false;    
-let ligneSelectionnee = null; // Mémorise la ligne cliquée
-=======
 // ============================================================================
 // SECTION 1 : VARIABLES GLOBALES
 // ============================================================================
 let map;
 let infoWindow;
->>>>>>> 3437ef2112f1cf8116b705697dd07b050a722375
 
 let reseauData;
 let reseauDataLoaded = false;
@@ -41,90 +33,6 @@ let heatmap = null;
 let frequentationVisible = false;
 const cacheWikipedia = new Map();
 
-<<<<<<< HEAD
-// --- NOUVEAU : GESTION DES LIGNES (Idées 1, 2, 3) ---
-
-function appliquerStyleReseau() {
-    reseauData.setStyle(function(feature) { 
-        if (!reseauVisible) return { visible: false };
-        
-        // On détermine à l'avance la couleur et l'épaisseur de base selon le type de ligne
-        let estLGV = (feature.getProperty('CATLIG') === 'Ligne à grande vitesse');
-        let couleurBase = estLGV ? '#E20074' : '#0055A4';
-        let epaisseurBase = estLGV ? 4 : 1.5;
-
-        // Idée 2 : Mode FOCUS / EXTINCTION
-        if (ligneSelectionnee) {
-            if (feature === ligneSelectionnee) {
-                // 1. La ligne sélectionnée est mise en valeur (plus épaisse, opaque, au premier plan)
-                return {
-                    strokeColor: couleurBase, // Elle garde sa couleur SNCF
-                    strokeWeight: epaisseurBase + 3, // On la grossit un peu
-                    strokeOpacity: 1.0,
-                    zIndex: 100,
-                    clickable: false,
-                    visible: true
-                };
-            } else {
-                // 2. Toutes les AUTRES lignes s'éteignent (Gris clair, transparentes, en arrière-plan)
-                return {
-                    strokeColor: '#999999',
-                    strokeWeight: epaisseurBase,
-                    strokeOpacity: 0.3,
-                    zIndex: 1,
-                    clickable: false,
-                    visible: true
-                };
-            }
-        }
-
-        // Mode Normal (si aucune ligne n'est cliquée)
-        return {
-            strokeColor: couleurBase,
-            strokeWeight: epaisseurBase,
-            strokeOpacity: 0.8,
-            zIndex: estLGV ? 10 : 5,
-            clickable: false, 
-            visible: true
-        };
-    });
-}
-
-function selectionnerLigne(feature, latLng) {
-    ligneSelectionnee = feature;
-    appliquerStyleReseau(); // Met à jour le visuel immédiatement
-    
-    let typeLigne = feature.getProperty('CATLIG');
-    let idLigne = feature.getProperty('LIB_LIGNE') || "Inconnue";
-    
-    let contenuBulle = `
-        <div style="color: #333; font-family: sans-serif; padding: 5px;">
-            <h3 style="margin: 0 0 5px 0; color: #004696; font-size: 16px;">Ligne ${idLigne}</h3>
-            <p style="margin: 0; font-size: 14px;"><strong>Type:</strong> ${typeLigne}</p>
-        </div>
-    `;
-    infoWindow.setContent(contenuBulle);
-    infoWindow.setPosition(latLng);
-    infoWindow.open(map);
-}
-
-function deselectionnerLigne() {
-    if (ligneSelectionnee || infoWindow.getMap()) {
-        ligneSelectionnee = null;
-        appliquerStyleReseau();
-        infoWindow.close(); // Ferme la bulle (Idée 3)
-    }
-}
-
-// 1. Fonction pour le réseau ferré (Mise à jour)
-function loadLGVLines() {
-    if (!reseauDataLoaded) {
-        reseauData.loadGeoJson('reseau.geojson'); 
-        reseauDataLoaded = true; 
-        // L'ancien écouteur de clic a été retiré, c'est la carte qui écoute maintenant !
-    }
-    appliquerStyleReseau();
-=======
 let tarifsVisible = false;
 let grapheInitialise = false;
 let indexGares = null;
@@ -194,24 +102,56 @@ function appliquerStyleReseau() {
         }
         return { strokeColor: couleurBase, strokeWeight: epaisseurBase, strokeOpacity: 0.8, zIndex: estLGV ? 10 : 5, clickable: false, visible: true };
     });
->>>>>>> 3437ef2112f1cf8116b705697dd07b050a722375
 }
 
 function selectionnerLigne(feature, latLng) {
     ligneSelectionnee = feature;
     appliquerStyleReseau();
+    
     const typeLigne = feature.getProperty('CATLIG') || 'Inconnu';
     const idLigne = feature.getProperty('LIB_LIGNE') || feature.getProperty('CODE_LIGNE') || "Inconnue";
     const estLGV = typeLigne === 'Ligne à grande vitesse';
+    
+    // --- NOUVEAU : Calcul dynamique de la VRAIE distance via Google Maps ---
+    let distanceMetres = 0;
+    let geometry = feature.getGeometry();
+    
+    if (geometry) {
+        // Selon comment la ligne est dessinée (un seul ou plusieurs segments)
+        if (geometry.getType() === 'LineString') {
+            distanceMetres = google.maps.geometry.spherical.computeLength(geometry.getArray());
+        } else if (geometry.getType() === 'MultiLineString') {
+            geometry.getArray().forEach(function(ligneString) {
+                distanceMetres += google.maps.geometry.spherical.computeLength(ligneString.getArray());
+            });
+        }
+    }
+    
+    // On convertit les mètres en kilomètres
+    let distanceKm = distanceMetres / 1000;
+    
+    // Au cas où le calcul échoue, on garde une sécurité
+    if (distanceKm === 0) distanceKm = 100; 
+
+    // Calcul du prix bout à bout avec la vraie distance
+    let ratioPrix = estLGV ? 0.18 : 0.12; 
+    let prixBoutABout = (distanceKm * ratioPrix).toFixed(2);
+    let ratioTexte = estLGV ? '0,18 €/km' : '0,10 à 0,15 €/km';
+
     infoWindow.setContent(`
         <div style="color:#333;font-family:sans-serif;padding:5px;min-width:220px;">
             <h3 style="margin:0 0 8px 0;color:#004696;font-size:16px;">Ligne ${idLigne}</h3>
             <p style="margin:4px 0;font-size:13px;"><strong>Type :</strong> ${typeLigne}</p>
             <hr style="border:0;border-top:1px solid #eee;margin:8px 0;">
             <p style="margin:4px 0;font-size:12px;"><strong>Service :</strong> ${estLGV ? 'TGV' : 'TER/IC'}</p>
-            <p style="margin:4px 0;font-size:12px;"><strong>Tarif moyen :</strong> ${estLGV ? '0,18 €/km' : '0,10 à 0,15 €/km'}</p>
             <p style="margin:4px 0;font-size:12px;"><strong>Vitesse :</strong> ${estLGV ? '~250 km/h' : '~90 km/h'}</p>
+            <hr style="border:0;border-top:1px solid #eee;margin:8px 0;">
+            
+            <p style="margin:4px 0;font-size:13px;color:#004696;"><strong>Prix bout à bout :</strong> ~${prixBoutABout} €</p>
+            <p style="margin:4px 0;font-size:13px;color:#004696;"><strong>Distance :</strong> ~${distanceKm.toFixed(0)} km</p>
+            <p style="margin:4px 0;font-size:13px;color:#E20074;"><strong>Ratio :</strong> ${ratioTexte}</p>
         </div>`);
+        
     infoWindow.setPosition(latLng);
     infoWindow.open(map);
 }
@@ -751,103 +691,9 @@ function initMap() {
     reseauData.setMap(map);
     infoWindow = new google.maps.InfoWindow({ disableAutoPan: true });
     const legend = document.getElementById("map-legend");
-<<<<<<< HEAD
-    legend.style.display = "block"; 
-    map.controls[google.maps.ControlPosition.BOTTOM_LEFT].push(legend);
-    
-    map.addListener('idle', function() {
-        if (garesVisible) actualiserAffichageGares();
-    });
-    // --- NOUVEAU : ECOUTEUR GLOBAL SUR LA CARTE (Idées 1 & 3) ---
-    map.addListener('click', function(event) {
-        let aCliqueSurLigne = false;
 
-        // Idée 1 : Algorithme de tolérance géométrique
-        if (reseauVisible) {
-            let clickLatLng = event.latLng;
-            let toleranceDegrees = 0.01; // Tolérance de clic (environ 1 kilomètre)
-
-            // On parcourt les lignes pour calculer leur distance avec le clic
-            reseauData.forEach(function(feature) {
-                if (aCliqueSurLigne) return; // Si on a déjà trouvé, on s'arrête
-
-                let geometry = feature.getGeometry();
-                if (!geometry) return;
-
-                // Extraction des coordonnées de la ligne
-                let lignes = [];
-                if (geometry.getType() === 'LineString') {
-                    lignes.push(geometry.getArray());
-                } else if (geometry.getType() === 'MultiLineString') {
-                    lignes = geometry.getArray().map(ligne => ligne.getArray());
-                }
-
-                // On vérifie si le clic est sur le bord de la ligne (avec tolérance)
-                for (let i = 0; i < lignes.length; i++) {
-                    let poly = new google.maps.Polyline({path: lignes[i]});
-                    if (google.maps.geometry.poly.isLocationOnEdge(clickLatLng, poly, toleranceDegrees)) {
-                        aCliqueSurLigne = true;
-                        selectionnerLigne(feature, clickLatLng); // On sélectionne !
-                        break;
-                    }
-                }
-            });
-        }
-
-        // Idée 3 : Fermer l'action si on a cliqué dans le vide
-        if (!aCliqueSurLigne) {
-            deselectionnerLigne();
-        }
-    });
-    // --- NOUVEAU : CHANGEMENT DE CURSEUR AU SURVOL (Idée 1) ---
-    let timerSurvol = null;
-    
-    map.addListener('mousemove', function(event) {
-        if (!reseauVisible) return; // Si les lignes sont cachées, on ne fait rien
-
-        // Le "Throttle" : Si le calcul est déjà en cours, on ignore ce mouvement de souris
-        if (timerSurvol) return;
-
-        // On lance un compte à rebours de 50 millisecondes
-        timerSurvol = setTimeout(() => {
-            let cursorLatLng = event.latLng;
-            let toleranceDegrees = 0.01; // Même tolérance que pour le clic
-            let surLigne = false;
-
-            // On fait le même calcul mathématique que pour le clic
-            reseauData.forEach(function(feature) {
-                if (surLigne) return;
-                let geometry = feature.getGeometry();
-                if (!geometry) return;
-
-                let lignes = [];
-                if (geometry.getType() === 'LineString') {
-                    lignes.push(geometry.getArray());
-                } else if (geometry.getType() === 'MultiLineString') {
-                    lignes = geometry.getArray().map(ligne => ligne.getArray());
-                }
-
-                for (let i = 0; i < lignes.length; i++) {
-                    let poly = new google.maps.Polyline({path: lignes[i]});
-                    if (google.maps.geometry.poly.isLocationOnEdge(cursorLatLng, poly, toleranceDegrees)) {
-                        surLigne = true;
-                        break;
-                    }
-                }
-            });
-
-            // On change le curseur global de la carte selon le résultat
-            // 'pointer' = la petite main, '' = flèche normale
-            map.setOptions({ draggableCursor: surLigne ? 'pointer' : '' });
-            
-            // On libère le timer pour autoriser le prochain calcul
-            timerSurvol = null;
-        }, 50); 
-    });
-=======
     if (legend) { legend.style.display = "block"; map.controls[google.maps.ControlPosition.BOTTOM_LEFT].push(legend); }
     map.addListener('idle', function() { if (garesVisible) actualiserAffichageGares(); });
->>>>>>> 3437ef2112f1cf8116b705697dd07b050a722375
 }
 
 function basculerBouton(appName, estActif) {
@@ -868,15 +714,9 @@ function loadApp(appName) {
         else actualiserAffichageGares();
     }
     else if (appName === 'reseau') {
-<<<<<<< HEAD
-        reseauVisible = !reseauVisible; 
-        basculerBouton('reseau', reseauVisible); 
-        loadLGVLines(); 
-        if (!reseauVisible) deselectionnerLigne(); // <-- NOUVEAU : Nettoie si on cache les lignes
-=======
+
         reseauVisible = !reseauVisible; basculerBouton('reseau', reseauVisible);
         loadLGVLines(); if (!reseauVisible) deselectionnerLigne();
->>>>>>> 3437ef2112f1cf8116b705697dd07b050a722375
     }
     else if (appName === 'frequentation') {
         frequentationVisible = !frequentationVisible; basculerBouton('frequentation', frequentationVisible);
@@ -902,13 +742,19 @@ function showView(viewName) {
 }
 
 function mettreAJourIsochrone() {
-    const sel = document.getElementById('isochrone-gare-select');
+    const input = document.getElementById('isochrone-gare-recherche');
     const cursor = document.getElementById('isochrone-curseur');
-    const idxSource = parseInt(sel?.value ?? '-1');
+    
+    // On cherche l'ID de la gare tapée dans l'input
+    const idxSource = input ? trouverGare(input.value) : -1;
     const maxMinutes = parseInt(cursor?.value ?? '300');
+    
     const label = document.getElementById('isochrone-label-temps');
     if (label) label.textContent = formatMinutes(maxMinutes);
-    if (isNaN(idxSource) || idxSource < 0 || !isochroneVisible) return;
+    
+    // Si la gare n'est pas trouvée, on ne calcule rien
+    if (idxSource === -1 || !isochroneVisible) return;
+    
     afficherIsochrone(idxSource, maxMinutes);
 }
 
