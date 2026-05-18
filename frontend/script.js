@@ -563,6 +563,10 @@ function effacerIsochrone() {
 // SECTION 8 : COMPARATEUR — interface
 // ============================================================================
 
+// ============================================================================
+// SECTION 8 : COMPARATEUR — interface
+// ============================================================================
+
 function calculerTrajet() {
     if (!initialiserGraphe()) return;
     const inputDep = document.getElementById('gare-depart').value;
@@ -573,16 +577,24 @@ function calculerTrajet() {
     if (idxArr === -1) { resultat.innerHTML = `<div class="resultat-erreur">Gare d'arrivée introuvable : « ${inputArr} »</div>`; return; }
     if (idxDep === idxArr) { resultat.innerHTML = `<div class="resultat-erreur">Départ et arrivée identiques.</div>`; return; }
     resultat.innerHTML = `<div class="resultat-loading">Calcul en cours…</div>`;
+    
     setTimeout(() => {
         const t0 = performance.now();
         const trajet = dijkstra(idxDep, idxArr);
         if (!trajet) { resultat.innerHTML = `<div class="resultat-erreur">Aucun itinéraire trouvé.</div>`; return; }
-        afficherResultatTrajet(trajet, idxDep, idxArr, (performance.now() - t0).toFixed(0));
+        
+        // Sauvegarde du trajet pour le bouton retour
+        dernierTrajetCalcule = trajet;
+        indexGareDepCalcule = idxDep;
+        indexGareArrCalcule = idxArr;
+        tCalcDernier = (performance.now() - t0).toFixed(0);
+
+        afficherResultatTrajet(trajet, idxDep, idxArr, tCalcDernier, false);
         afficherTrajetSurCarte(trajet);
     }, 50);
 }
 
-function afficherResultatTrajet(trajet, idxDep, idxArr, tCalc) {
+function afficherResultatTrajet(trajet, idxDep, idxArr, tCalc, modeSousTrajet = false) {
     const resultat = document.getElementById('tarifs-resultat');
     const tk = grapheSNCF.tarifs_km;
     let distT = 0, prixT = 0;
@@ -591,14 +603,24 @@ function afficherResultatTrajet(trajet, idxDep, idxArr, tCalc) {
     const corr = trajet.segments.filter((s, i) => i > 0 && s.cat !== trajet.segments[i-1].cat).length;
     const h = Math.floor(trajet.dureeTotale / 60), m = Math.round(trajet.dureeTotale % 60);
     const dF = h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m} min`;
-    const det = trajet.segments.map(s => `
-        <div class="segment-trajet">
+    
+    // Détermine si on rend le segment cliquable ou non
+    const det = trajet.segments.map((s, index) => {
+        const attributsClic = modeSousTrajet ? '' : `onclick="voirSousTrajet(${index})" style="cursor:pointer;" title="Isoler ce trajet sur la carte" onmouseover="this.style.backgroundColor='#f0f8ff'" onmouseout="this.style.backgroundColor='transparent'"`;
+        return `
+        <div class="segment-trajet" ${attributsClic} style="padding: 5px; border-radius: 4px; transition: background-color 0.2s;">
             <span class="segment-cat segment-cat-${s.cat}">${s.cat}</span>
             <span class="segment-trajet-noms">${grapheSNCF.gares[s.de].nom} → ${grapheSNCF.gares[s.vers].nom}</span>
             <span class="segment-trajet-info">${Math.round(s.duree)} min · ${s.distance.toFixed(0)} km</span>
-        </div>`).join('');
+        </div>`;
+    }).join('');
+
+    // Affichage d'un bouton de retour si on est en train de visualiser un sous-trajet
+    const boutonRetour = modeSousTrajet ? `<button onclick="retourTrajetGlobal()" style="width:100%; margin-bottom:15px; padding:8px; background:#475569; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">⬅ Revenir au trajet complet</button>` : '';
+
     resultat.innerHTML = `
         <div class="resultat-trajet">
+            ${boutonRetour}
             <div class="resultat-header"><h4>${grapheSNCF.gares[idxDep].nom} → ${grapheSNCF.gares[idxArr].nom}</h4><span class="resultat-meta">Calculé en ${tCalc} ms</span></div>
             <div class="resultat-chiffres">
                 <div class="chiffre-bloc"><span class="chiffre-label">Durée</span><span class="chiffre-valeur">${dF}</span></div>
@@ -606,9 +628,35 @@ function afficherResultatTrajet(trajet, idxDep, idxArr, tCalc) {
                 <div class="chiffre-bloc"><span class="chiffre-label">Prix estimé</span><span class="chiffre-valeur">${prixT.toFixed(2)} €</span></div>
                 <div class="chiffre-bloc"><span class="chiffre-label">Correspondances</span><span class="chiffre-valeur">${corr}</span></div>
             </div>
-            <details class="resultat-details"><summary>Détail (${trajet.segments.length} segments)</summary><div class="segments-liste">${det}</div></details>
+            <details class="resultat-details" ${modeSousTrajet ? 'open' : ''}><summary>Détail (${trajet.segments.length} segments)</summary><div class="segments-liste">${det}</div></details>
             <div class="resultat-disclaimer">💡 Prix estimé (${[...cats].join(', ')}). Tarifs réels variables.</div>
         </div>`;
+}
+
+function voirSousTrajet(index) {
+    if (!dernierTrajetCalcule) return;
+    
+    // On isole le segment sur lequel l'utilisateur a cliqué
+    const segment = dernierTrajetCalcule.segments[index];
+    
+    // On crée un faux objet "trajet" qui ne contient que ce tronçon
+    const sousTrajet = {
+        chemin: [segment.de, segment.vers],
+        dureeTotale: segment.duree,
+        segments: [segment]
+    };
+    
+    // On met à jour l'interface avec ce sous-trajet, et on l'affiche sur la carte
+    afficherResultatTrajet(sousTrajet, segment.de, segment.vers, tCalcDernier, true);
+    afficherTrajetSurCarte(sousTrajet);
+}
+
+function retourTrajetGlobal() {
+    if (!dernierTrajetCalcule) return;
+    
+    // On restaure l'affichage et la carte d'origine
+    afficherResultatTrajet(dernierTrajetCalcule, indexGareDepCalcule, indexGareArrCalcule, tCalcDernier, false);
+    afficherTrajetSurCarte(dernierTrajetCalcule);
 }
 
 function afficherTrajetSurCarte(trajet) {
@@ -771,3 +819,5 @@ window.showView = showView;
 window.calculerTrajet = calculerTrajet;
 window.mettreAJourIsochrone = mettreAJourIsochrone;
 window.mettreAJourFiltreGares = mettreAJourFiltreGares;
+window.voirSousTrajet = voirSousTrajet;
+window.retourTrajetGlobal = retourTrajetGlobal;
