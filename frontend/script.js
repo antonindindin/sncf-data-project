@@ -788,6 +788,23 @@ function loadApp(appName) {
         if (isochroneVisible) initialiserGraphe();
         else { effacerIsochrone(); isochroneResultat = null; isochroneGareSource = -1; }
     }
+    // ===== AUTO-DÉFILEMENT MOBILE =====
+    // Si on est sur smartphone, on fait défiler l'écran vers le panneau ouvert ou la carte
+    if (window.innerWidth <= 768) {
+        let elementCible = document.getElementById('app-container'); // Par défaut, on descend vers la carte
+        
+        if (appName === 'tarifs' && tarifsVisible) elementCible = document.getElementById('tarifs-panel');
+        if (appName === 'isochrone' && isochroneVisible) elementCible = document.getElementById('isochrone-panel');
+        if (appName === 'gares' && garesVisible) elementCible = document.getElementById('gares-panel');
+        
+        if (elementCible) {
+            setTimeout(() => {
+                elementCible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100); // Petit délai pour laisser le temps au panneau de s'afficher
+        }
+    }
+
+
 }
 
 function showView(viewName) {
