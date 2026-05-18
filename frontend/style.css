@@ -1,7 +1,11 @@
 /**
  * ============================================================================
- * SNCF DATA PROJECT - FEUILLE DE STYLES (v12 — merge mode nuit + isochrone)
+ * SNCF DATA PROJECT - FEUILLE DE STYLES (v11 — curseur isochrone cohérent)
  * ============================================================================
+ * Les barres .isochrone-slider et .isochrone-legende-gradient utilisent
+ * EXACTEMENT le même gradient, calé sur la fonction couleurIsochrone()
+ * du script.js (ancres 30min/2h/5h/8h/12h/15h aux positions
+ * 0% / 10.34% / 31.03% / 51.72% / 79.31% / 100%).
  */
 
 :root {
@@ -12,6 +16,7 @@
     --bg-color: #F4F6F9;
     --text-color: #333333;
     --sncf-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    /* Gradient unique partagé par le curseur ET la légende */
     --isochrone-gradient: linear-gradient(to right,
         rgb(30,200,70) 0%,
         rgb(120,200,30) 10.34%,
@@ -52,7 +57,7 @@ body {
     letter-spacing: 1px;
 }
 
-.main-nav ul { list-style:none; display:flex; gap:30px; margin:0; padding:0; align-items:center; }
+.main-nav ul { list-style:none; display:flex; gap:30px; margin:0; padding:0; }
 .main-nav a {
     color: var(--sncf-white);
     text-decoration: none;
@@ -62,19 +67,6 @@ body {
     transition: background-color 0.2s;
 }
 .main-nav a:hover { background-color: rgba(255,255,255,0.15); }
-
-#theme-toggle {
-    background: rgba(255,255,255,0.15);
-    color: white;
-    border: 1px solid rgba(255,255,255,0.3);
-    padding: 6px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    font-family: inherit;
-    transition: background-color 0.2s;
-}
-#theme-toggle:hover { background: rgba(255,255,255,0.25); }
 
 /* ============================================================ GRILLE */
 
@@ -215,8 +207,7 @@ body {
     color: #666;
 }
 
-.isochrone-field select,
-.isochrone-field input[type="text"] {
+.isochrone-field select {
     padding: 10px 12px;
     border: 2px solid #ddd;
     border-radius: 6px;
@@ -226,9 +217,6 @@ body {
     color: var(--text-color);
     cursor: pointer;
     transition: border-color 0.2s;
-}
-
-.isochrone-field select {
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
@@ -236,8 +224,7 @@ body {
     padding-right: 36px;
 }
 
-.isochrone-field select:focus,
-.isochrone-field input[type="text"]:focus { outline: none; border-color: var(--sncf-blue); }
+.isochrone-field select:focus { outline: none; border-color: var(--sncf-blue); }
 
 /* ----- Curseur ----- */
 
@@ -270,6 +257,7 @@ body {
     border-radius: 4px;
     outline: none;
     cursor: pointer;
+    /* MÊME gradient que la légende (variable partagée) */
     background: var(--isochrone-gradient);
 }
 
@@ -294,6 +282,7 @@ body {
     box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
 
+/* Les marques du curseur sont positionnées en absolu aux bons % */
 .isochrone-curseur-marks {
     position: relative;
     height: 1.1em;
@@ -308,6 +297,32 @@ body {
 }
 .isochrone-curseur-marks span:first-child { transform: translateX(0); }
 .isochrone-curseur-marks span:last-child  { transform: translateX(-100%); }
+
+/* ----- Légende des couleurs ----- */
+
+.isochrone-legende { margin-bottom: 14px; }
+
+.isochrone-legende-gradient {
+    height: 10px;
+    border-radius: 5px;
+    /* STRICTEMENT le même gradient que le curseur */
+    background: var(--isochrone-gradient);
+    margin-bottom: 4px;
+}
+
+.isochrone-legende-labels {
+    position: relative;
+    height: 1.1em;
+    font-size: 0.75rem;
+    color: #666;
+}
+.isochrone-legende-labels span {
+    position: absolute;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+.isochrone-legende-labels span:first-child { transform: translateX(0); }
+.isochrone-legende-labels span:last-child  { transform: translateX(-100%); }
 
 /* ----- Stats ----- */
 
@@ -392,38 +407,3 @@ body {
     #btn-calculer-trajet { width:100%; }
     .isochrone-field { max-width:100%; }
 }
-
-/* ============================================================ MODE NUIT */
-
-body[data-theme="dark"] {
-    --bg-color: #121212;
-    --text-color: #e0e0e0;
-    --sncf-white: #1e1e1e;
-}
-
-body[data-theme="dark"] .app-card {
-    background-color: #1a1a1a;
-    border-color: #333;
-}
-
-body[data-theme="dark"] .app-card h3 { color: #fff; }
-
-body[data-theme="dark"] .app-card.active {
-    border-color: var(--sncf-blue);
-    background-color: #002244;
-}
-
-body[data-theme="dark"] .tarifs-field input,
-body[data-theme="dark"] .isochrone-field select,
-body[data-theme="dark"] .isochrone-field input[type="text"] {
-    background-color: #2a2a2a;
-    color: #e0e0e0;
-    border-color: #444;
-}
-
-body[data-theme="dark"] .resultat-trajet { background-color: #1a1a1a; border-color: #333; }
-body[data-theme="dark"] .chiffre-bloc { background-color: #222; border-color: #333; }
-body[data-theme="dark"] .chiffre-label { color: #aaa; }
-body[data-theme="dark"] .resultat-details { background-color: #222; border-color: #333; }
-body[data-theme="dark"] .segment-trajet { border-color: #333; }
-body[data-theme="dark"] .segment-trajet-noms { color: #ddd; }

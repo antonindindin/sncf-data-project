@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SNCF DataHub</title>
-    <link rel="stylesheet" href="style.css?v=12">
+    <!-- ?v=11 force le rechargement du CSS (contourne le cache en file://) -->
+    <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
     <div class="container">
@@ -15,7 +16,6 @@
                     <li><a href="#" onclick="showView('home'); return false;">Accueil</a></li>
                     <li><a href="#" onclick="showView('about'); return false;">À Propos</a></li>
                     <li><a href="#" onclick="return false;">Contact</a></li>
-                    <li><button id="theme-toggle" aria-label="Basculer le thème">🌙 Mode Nuit</button></li>
                 </ul>
             </nav>
         </header>
@@ -77,7 +77,7 @@
                     <div id="tarifs-resultat" class="tarifs-resultat"></div>
                 </div>
 
-                <div id="isochrone-panel" class="isochrone-panel" style="display:none;">
+<div id="isochrone-panel" class="isochrone-panel" style="display:none;">
                     <h3>🕐 Où peut-on aller en train ?</h3>
                     <p class="isochrone-description">
                         Sélectionne une gare de départ, puis ajuste le curseur pour voir toutes les destinations accessibles en train en France selon le temps de trajet.
@@ -85,8 +85,10 @@
 
                     <div class="isochrone-form">
                         <div class="isochrone-field">
-                            <label for="isochrone-gare-recherche">Gare de départ</label>
-                            <input type="text" id="isochrone-gare-recherche" list="liste-gares" autocomplete="off" placeholder="Ex : Montpellier Saint-Roch" onchange="mettreAJourIsochrone()">
+                            <label for="isochrone-gare-select">Gare de départ</label>
+                            <select id="isochrone-gare-select" onchange="mettreAJourIsochrone()">
+                                <option value="">— Choisir une gare —</option>
+                            </select>
                         </div>
                     </div>
 
@@ -163,7 +165,7 @@
     <script src="wifi.js"></script>
     <script src="frequentation.js"></script>
     <script src="graphe.js"></script>
-    <script src="script.js?v=12"></script>
-    <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap&libraries=visualization,geometry"></script>
+    <script src="script.js?v=11"></script>
+    <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap&libraries=visualization"></script>
 </body>
 </html>
