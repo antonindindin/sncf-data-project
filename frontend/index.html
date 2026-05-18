@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
     <title>SNCF DataHub</title>
-    <link rel="stylesheet" href="style.css?v=12">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
     <div class="container">
@@ -46,7 +49,7 @@
                 </div>
 
                 <div id="gares-panel" class="gares-panel" style="display:none;">
-                    <h3>🏛️ Affichage des gares</h3>
+                    <h3>Affichage des gares</h3>
                     <div class="isochrone-form">
                         <div class="isochrone-field">
                             <label for="filtre-gares-select">Filtrer par type de trafic</label>
@@ -78,7 +81,7 @@
                 </div>
 
                 <div id="isochrone-panel" class="isochrone-panel" style="display:none;">
-                    <h3>🕐 Où peut-on aller en train ?</h3>
+                    <h3>Où peut-on aller en train ?</h3>
                     <p class="isochrone-description">
                         Sélectionne une gare de départ, puis ajuste le curseur pour voir toutes les destinations accessibles en train en France selon le temps de trajet.
                     </p>
@@ -92,7 +95,7 @@
 
                     <div class="isochrone-curseur-container">
                         <div class="isochrone-curseur-header">
-                            <span class="isochrone-curseur-label">Temps de trajet max :</span>
+                            <span class="isochrone-curseur-label">Temps de trajet max</span>
                             <span id="isochrone-label-temps" class="isochrone-temps-valeur">5h</span>
                         </div>
                         <div class="isochrone-curseur-track">
