@@ -142,6 +142,7 @@ function selectionnerLigne(feature, latLng) {
             <p style="margin:4px 0;font-size:13px;color:#004696;"><strong>Distance :</strong> ~${distanceKm.toFixed(0)} km</p>
             <p style="margin:4px 0;font-size:13px;color:#E20074;"><strong>Ratio :</strong> ${ratioTexte}</p>
         </div>`);
+        
     infoWindow.setPosition(latLng);
     infoWindow.open(map);
 }
@@ -700,6 +701,7 @@ function initMap() {
     reseauData.setMap(map);
     infoWindow = new google.maps.InfoWindow({ disableAutoPan: true });
     const legend = document.getElementById("map-legend");
+
     if (legend) { legend.style.display = "block"; map.controls[google.maps.ControlPosition.BOTTOM_LEFT].push(legend); }
     map.addListener('idle', function() { if (garesVisible) actualiserAffichageGares(); });
 }
@@ -722,6 +724,7 @@ function loadApp(appName) {
         else actualiserAffichageGares();
     }
     else if (appName === 'reseau') {
+
         reseauVisible = !reseauVisible; basculerBouton('reseau', reseauVisible);
         loadLGVLines(); if (!reseauVisible) deselectionnerLigne();
     }
@@ -753,6 +756,7 @@ function mettreAJourIsochrone() {
     const cursor = document.getElementById('isochrone-curseur');
     const idxSource = input ? trouverGare(input.value) : -1;
     const maxMinutes = parseInt(cursor?.value ?? '300');
+    
     const label = document.getElementById('isochrone-label-temps');
     if (label) label.textContent = formatMinutes(maxMinutes);
     if (idxSource === -1 || !isochroneVisible) return;
