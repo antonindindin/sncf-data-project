@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SNCF Data Project</title>
-    <link rel="stylesheet" href="style.css">
+    <title>SNCF DataHub</title>
+    <!-- ?v=11 force le rechargement du CSS (contourne le cache en file://) -->
+    <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
     <div class="container">
@@ -12,9 +13,9 @@
             <div class="logo">SNCF DataHub</div>
             <nav class="main-nav">
                 <ul>
-                    <li><a href="#" onclick="showView('home')">Accueil</a></li>
-                    <li><a href="#" onclick="showView('about')">À Propos</a></li>
-                    <li><a href="#">Contact</a></li>
+                    <li><a href="#" onclick="showView('home'); return false;">Accueil</a></li>
+                    <li><a href="#" onclick="showView('about'); return false;">À Propos</a></li>
+                    <li><a href="#" onclick="return false;">Contact</a></li>
                 </ul>
             </nav>
         </header>
@@ -24,7 +25,7 @@
                 <div class="apps-grid">
                     <div id="btn-gares" class="app-card" onclick="loadApp('gares')">
                         <span class="app-icon">🏛️</span>
-                        <h3>Gares & Villes</h3>
+                        <h3>Gares &amp; Villes</h3>
                     </div>
                     <div id="btn-reseau" class="app-card" onclick="loadApp('reseau')">
                         <span class="app-icon">🛤️</span>
@@ -38,51 +39,140 @@
                         <span class="app-icon">💶</span>
                         <h3>Comparateur Tarifs</h3>
                     </div>
+                    <div id="btn-isochrone" class="app-card" onclick="loadApp('isochrone')">
+                        <span class="app-icon">🕐</span>
+                        <h3>Isochrone Train</h3>
+                    </div>
                 </div>
 
-                <div id="app-container"></div>
+                <div id="gares-panel" class="gares-panel" style="display:none;">
+                    <h3>🏛️ Affichage des gares</h3>
+                    <div class="isochrone-form">
+                        <div class="isochrone-field">
+                            <label for="filtre-gares-select">Filtrer par type de trafic</label>
+                            <select id="filtre-gares-select" onchange="mettreAJourFiltreGares()">
+                                <option value="toutes">Toutes les gares</option>
+                                <option value="tgv">Gares Nationales / TGV uniquement</option>
+                                <option value="ter">Gares Régionales / TER uniquement</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
 
-                <div id="map-legend" class="map-legend" style="display: none;">
+                <div id="tarifs-panel" class="tarifs-panel" style="display:none;">
+                    <h3>Comparateur de trajets</h3>
+                    <div class="tarifs-form">
+                        <div class="tarifs-field">
+                            <label for="gare-depart">Gare de départ</label>
+                            <input type="text" id="gare-depart" list="liste-gares" autocomplete="off" placeholder="Ex : Paris Gare de Lyon">
+                        </div>
+                        <div class="tarifs-arrow">→</div>
+                        <div class="tarifs-field">
+                            <label for="gare-arrivee">Gare d'arrivée</label>
+                            <input type="text" id="gare-arrivee" list="liste-gares" autocomplete="off" placeholder="Ex : Marseille Saint-Charles">
+                        </div>
+                        <button id="btn-calculer-trajet" onclick="calculerTrajet()">Calculer</button>
+                    </div>
+                    <datalist id="liste-gares"></datalist>
+                    <div id="tarifs-resultat" class="tarifs-resultat"></div>
+                </div>
+
+<div id="isochrone-panel" class="isochrone-panel" style="display:none;">
+                    <h3>🕐 Où peut-on aller en train ?</h3>
+                    <p class="isochrone-description">
+                        Sélectionne une gare de départ, puis ajuste le curseur pour voir toutes les destinations accessibles en train en France selon le temps de trajet.
+                    </p>
+
+                    <div class="isochrone-form">
+                        <div class="isochrone-field">
+                            <label for="isochrone-gare-select">Gare de départ</label>
+                            <select id="isochrone-gare-select" onchange="mettreAJourIsochrone()">
+                                <option value="">— Choisir une gare —</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="isochrone-curseur-container">
+                        <div class="isochrone-curseur-header">
+                            <span class="isochrone-curseur-label">Temps de trajet max :</span>
+                            <span id="isochrone-label-temps" class="isochrone-temps-valeur">5h</span>
+                        </div>
+                        <div class="isochrone-curseur-track">
+                            <input type="range" id="isochrone-curseur"
+                                   min="30" max="900" step="15" value="300"
+                                   oninput="mettreAJourIsochrone()"
+                                   class="isochrone-slider">
+                            <div class="isochrone-curseur-marks">
+                                <span style="left:0%">30min</span>
+                                <span style="left:10.34%">2h</span>
+                                <span style="left:31.03%">5h</span>
+                                <span style="left:51.72%">8h</span>
+                                <span style="left:79.31%">12h</span>
+                                <span style="left:100%">15h</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="isochrone-nb-gares" class="isochrone-stats"></div>
+                </div>
+
+                <div id="app-container">
+                    <div id="map-loading" class="map-loading">
+                        <div class="spinner"></div>
+                        <p>Chargement de la carte…</p>
+                    </div>
+                </div>
+
+                <div id="map-legend" class="map-legend" style="display:none;">
                     <h4>Légende</h4>
                     <div class="legend-item"><span class="legend-dot" style="background:#E20074;"></span>Gare Nationale / TGV</div>
                     <div class="legend-item"><span class="legend-dot" style="background:#0088CE;"></span>Gare Régionale</div>
                     <div class="legend-item"><span class="legend-dot" style="background:#6C757D;"></span>Gare Locale</div>
-                    <hr style="border: 0; border-top: 1px solid #eee; margin: 8px 0;">
+                    <hr>
                     <div class="legend-item"><span class="legend-line" style="background:#E20074;"></span>Ligne LGV</div>
                     <div class="legend-item"><span class="legend-line" style="background:#0055A4;"></span>Ligne Classique</div>
                 </div>
             </div>
 
-            <div id="about-view" class="about-card" style="display: none;">
+            <div id="about-view" class="about-card" style="display:none;">
                 <h2>À Propos du SNCF DataHub</h2>
                 <p>Bienvenue sur le SNCF DataHub, une plateforme interactive permettant de visualiser, d'explorer et d'analyser les données ouvertes (Open Data) relatives au réseau ferroviaire français.</p>
-                
                 <h3>L'Auteur</h3>
-                <p>Ce projet d'interface cartographique et d'analyse de données est développé par un étudiant en 3e année de Licence (CPES Modélisation et Numérique en Sciences de la Matière à Montpellier).</p>
-                
+                <p>Ce projet d'interface cartographique et d'analyse de données est développé par un étudiant en 3ᵉ année de Licence (CPES Modélisation et Numérique en Sciences de la Matière à Montpellier).</p>
                 <h3>Sources des Données</h3>
-                <p>Les informations présentées sur cette application proviennent majoritairement des portails open data officiels :</p>
                 <ul>
                     <li><strong>Gares et Villes :</strong> Localisation et segmentation des gares de voyageurs (SNCF Réseau).</li>
                     <li><strong>Réseau Ferré :</strong> Tracé géographique des lignes classiques et des Lignes à Grande Vitesse (LGV).</li>
                     <li><strong>Fréquentation :</strong> Données annuelles estimées des voyageurs par gare.</li>
+                    <li><strong>Horaires (GTFS) :</strong> Plan de transport théorique TGV, Intercités et TER.</li>
                 </ul>
-                
+                <h3>Méthodologie</h3>
+                <p><strong>Isochrone ferroviaire :</strong> algorithme de Dijkstra depuis une source unique sur le graphe des gares GTFS. Le calcul est effectué une seule fois, le curseur filtre et recolorie le résultat en mémoire sans recalcul.</p>
+                <p><strong>Comparateur de tarifs :</strong> Dijkstra point à point, temps de trajet depuis les horaires GTFS, tarifs estimés au km selon la catégorie de service.</p>
                 <h3>Technologies Utilisées</h3>
                 <ul>
                     <li><strong>Interface :</strong> HTML5, CSS3, Vanilla JavaScript.</li>
-                    <li><strong>Cartographie :</strong> Google Maps JavaScript API (incluant les bibliothèques Data et Visualization).</li>
-                    <li><strong>Enrichissement :</strong> API REST de Wikipédia pour la récupération dynamique des images et résumés de gares.</li>
+                    <li><strong>Cartographie :</strong> Google Maps JavaScript API.</li>
+                    <li><strong>Traitement des données :</strong> Python (GTFS + réseau ferré).</li>
+                    <li><strong>Enrichissement :</strong> API REST de Wikipédia pour les images de gares.</li>
                 </ul>
             </div>
         </main>
     </div>
 
-    <script src="script.js"></script>
+    <script src="reseau.js"></script>
+    <script src="gares.js"></script>
+    <script src="wifi.js"></script>
     <script src="frequentation.js"></script>
+<<<<<<< HEAD
     
     <script async
     src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap&libraries=visualization,geometry">
     </script>
+=======
+    <script src="graphe.js"></script>
+    <script src="script.js?v=11"></script>
+    <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap&libraries=visualization"></script>
+>>>>>>> 3437ef2112f1cf8116b705697dd07b050a722375
 </body>
 </html>
