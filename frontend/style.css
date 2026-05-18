@@ -407,3 +407,23 @@ body {
     #btn-calculer-trajet { width:100%; }
     .isochrone-field { max-width:100%; }
 }
+body[data-theme="dark"] {
+    --bg-color: #121212;
+    --text-color: #e0e0e0;
+    --sncf-white: #1e1e1e; /* Met à jour automatiquement le fond des panneaux latéraux et des cartes */
+}
+
+/* Ajustement spécifique pour les menus (app-card) et leurs titres en mode sombre */
+body[data-theme="dark"] .app-card {
+    background-color: #1a1a1a;
+    border-color: #333333;
+}
+
+body[data-theme="dark"] .app-card h3 {
+    color: #ffffff;
+}
+
+body[data-theme="dark"] .app-card.active {
+    border-color: var(--sncf-blue);
+    background-color: #002244;
+}
