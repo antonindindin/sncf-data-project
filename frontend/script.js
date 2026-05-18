@@ -1,13 +1,12 @@
 /**
  * ============================================================================
- * SNCF DATA PROJECT - MODULE CARTOGRAPHIQUE INTERACTIF (v11)
+ * SNCF DATA PROJECT - MODULE CARTOGRAPHIQUE INTERACTIF (v12 — merge)
  * ============================================================================
- * Isochrone ferroviaire :
- * - Seules les grandes gares (Segment A du GeoJSON) comptées dans les stats
- * - Les traces sont clippées à la bbox France (plus de débordement en Italie)
- * - Curseur interactif sans recalcul (Dijkstra source unique en cache)
- * - couleurIsochrone() = rampe CONTINUE strictement alignée sur le gradient
- *   CSS du curseur et de la légende (ancres 0/120/300/480/720/900 min).
+ * Fusion des deux branches :
+ *   - selectionnerLigne() enrichie (distance géométrique + prix bout à bout)
+ *   - Isochrone avec <input text> + trouverGare() (au lieu de <select>)
+ *   - Mode nuit (dark map styles + toggle CSS)
+ *   - couleurIsochrone() continue, alignée sur le gradient CSS
  */
 
 // ============================================================================
@@ -107,17 +106,41 @@ function appliquerStyleReseau() {
 function selectionnerLigne(feature, latLng) {
     ligneSelectionnee = feature;
     appliquerStyleReseau();
+
     const typeLigne = feature.getProperty('CATLIG') || 'Inconnu';
     const idLigne = feature.getProperty('LIB_LIGNE') || feature.getProperty('CODE_LIGNE') || "Inconnue";
     const estLGV = typeLigne === 'Ligne à grande vitesse';
+
+    // Calcul dynamique de la distance via Google Maps Geometry
+    let distanceMetres = 0;
+    const geometry = feature.getGeometry();
+    if (geometry) {
+        if (geometry.getType() === 'LineString') {
+            distanceMetres = google.maps.geometry.spherical.computeLength(geometry.getArray());
+        } else if (geometry.getType() === 'MultiLineString') {
+            geometry.getArray().forEach(function(ligneString) {
+                distanceMetres += google.maps.geometry.spherical.computeLength(ligneString.getArray());
+            });
+        }
+    }
+    let distanceKm = distanceMetres / 1000;
+    if (distanceKm === 0) distanceKm = 100;
+
+    const ratioPrix = estLGV ? 0.18 : 0.12;
+    const prixBoutABout = (distanceKm * ratioPrix).toFixed(2);
+    const ratioTexte = estLGV ? '0,18 €/km' : '0,10 à 0,15 €/km';
+
     infoWindow.setContent(`
         <div style="color:#333;font-family:sans-serif;padding:5px;min-width:220px;">
             <h3 style="margin:0 0 8px 0;color:#004696;font-size:16px;">Ligne ${idLigne}</h3>
             <p style="margin:4px 0;font-size:13px;"><strong>Type :</strong> ${typeLigne}</p>
             <hr style="border:0;border-top:1px solid #eee;margin:8px 0;">
             <p style="margin:4px 0;font-size:12px;"><strong>Service :</strong> ${estLGV ? 'TGV' : 'TER/IC'}</p>
-            <p style="margin:4px 0;font-size:12px;"><strong>Tarif moyen :</strong> ${estLGV ? '0,18 €/km' : '0,10 à 0,15 €/km'}</p>
             <p style="margin:4px 0;font-size:12px;"><strong>Vitesse :</strong> ${estLGV ? '~250 km/h' : '~90 km/h'}</p>
+            <hr style="border:0;border-top:1px solid #eee;margin:8px 0;">
+            <p style="margin:4px 0;font-size:13px;color:#004696;"><strong>Prix bout à bout :</strong> ~${prixBoutABout} €</p>
+            <p style="margin:4px 0;font-size:13px;color:#004696;"><strong>Distance :</strong> ~${distanceKm.toFixed(0)} km</p>
+            <p style="margin:4px 0;font-size:13px;color:#E20074;"><strong>Ratio :</strong> ${ratioTexte}</p>
         </div>`);
     infoWindow.setPosition(latLng);
     infoWindow.open(map);
@@ -327,14 +350,9 @@ function initialiserGraphe() {
         adjacence[ar.a].push({ voisin: ar.b, duree: ar.duree, distance: ar.distance, cat: ar.cat, trace: ar.trace, sens: 1 });
         adjacence[ar.b].push({ voisin: ar.a, duree: ar.duree, distance: ar.distance, cat: ar.cat, trace: ar.trace, sens: -1 });
     });
+    // Datalist pour le comparateur ET l'isochrone (partagé)
     const dl = document.getElementById('liste-gares');
     if (dl) dl.innerHTML = grapheSNCF.gares.map(g => g.nom).sort().map(n => `<option value="${n.replace(/"/g, '&quot;')}">`).join('');
-    const selIso = document.getElementById('isochrone-gare-select');
-    if (selIso) {
-        const triees = grapheSNCF.gares.map((g, i) => ({ nom: g.nom, idx: i })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
-        selIso.innerHTML = '<option value="">— Choisir une gare —</option>' +
-            triees.map(g => `<option value="${g.idx}">${g.nom}</option>`).join('');
-    }
     grapheInitialise = true;
     construireGrandesGares();
     console.log(`✓ Graphe GTFS : ${grapheSNCF.gares.length} gares, ${grapheSNCF.aretes.length} arêtes`);
@@ -425,16 +443,6 @@ class MinHeap {
 // SECTION 7 : ISOCHRONE — couleur et affichage
 // ============================================================================
 
-/**
- * Rampe de couleur CONTINUE, STRICTEMENT alignée sur le gradient CSS
- * (--isochrone-gradient dans style.css). Ancres (minutes → RGB) :
- *   0   → vert vif      (30,200,70)
- *   120 → vert-jaune    (120,200,30)
- *   300 → jaune-orangé  (255,180,0)
- *   480 → orange vif    (255,90,0)
- *   720 → rouge         (213,0,0)
- *   900 → rouge foncé   (140,0,0)
- */
 function couleurIsochrone(minutes) {
     const ancres = [
         [0,   [30, 200, 70]],
@@ -491,7 +499,6 @@ function afficherIsochrone(idxSource, maxMinutes) {
             const cle = Math.min(pred[u], u) + '_' + Math.max(pred[u], u);
             if (!aretesDessinees.has(cle)) {
                 aretesDessinees.add(cle);
-
                 if (ar.trace && ar.trace.length >= 2) {
                     const avgSegmentLength = ar.distance / (ar.trace.length - 1);
                     if (avgSegmentLength <= 4.0) {
@@ -528,11 +535,8 @@ function afficherIsochrone(idxSource, maxMinutes) {
         title: gareSource.nom + ' (départ)',
         icon: {
             path: google.maps.SymbolPath.CIRCLE,
-            scale: 13,
-            fillColor: '#003570',
-            fillOpacity: 1,
-            strokeColor: '#FFFFFF',
-            strokeWeight: 2.5
+            scale: 13, fillColor: '#003570', fillOpacity: 1,
+            strokeColor: '#FFFFFF', strokeWeight: 2.5
         },
         zIndex: 300
     });
@@ -547,7 +551,6 @@ function afficherIsochrone(idxSource, maxMinutes) {
         const nbTotal = [...Array(grapheSNCF.gares.length).keys()].filter(i => i !== idxSource && dist[i] <= maxMinutes && dist[i] !== Infinity).length;
         stats.textContent = `${nbTotal} gares atteignables · ${nbGrandesGaresAtteintes} grandes gares`;
     }
-
     console.log(`✓ Isochrone : ${isochronePolylines.length} segments, ${nbGrandesGaresAtteintes} grandes gares atteintes`);
 }
 
@@ -613,10 +616,8 @@ function afficherTrajetSurCarte(trajet) {
     const polys = [];
     trajet.segments.forEach(seg => {
         if (!seg.trace || seg.trace.length < 2) return;
-
         const avgSegmentLength = seg.distance / (seg.trace.length - 1);
         if (avgSegmentLength > 4.0) return;
-
         let pts = seg.trace.map(c => ({ lat: c[0], lng: c[1] }));
         if (seg.sens === -1) pts = pts.slice().reverse();
         const clipped = clipperEnFrance(pts.map(p => [p.lat, p.lng]));
@@ -642,7 +643,48 @@ function effacerTrajetSurCarte() {
 }
 
 // ============================================================================
-// SECTION 9 : INIT MAP & MENU
+// SECTION 9 : MODE NUIT
+// ============================================================================
+
+const darkMapStyles = [
+    { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
+    { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
+    { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
+    { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#263c3f" }] },
+    { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6b9a76" }] },
+    { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
+    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
+    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
+    { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
+    { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#f3d19c" }] },
+    { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2f3948" }] },
+    { featureType: "transit.station", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+    { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
+    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#515c6d" }] },
+    { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] }
+];
+
+function toggleTheme() {
+    const body = document.body;
+    const btn = document.getElementById('theme-toggle');
+    const isDark = body.getAttribute('data-theme') === 'dark';
+
+    if (isDark) {
+        body.removeAttribute('data-theme');
+        if (btn) btn.textContent = '🌙 Mode Nuit';
+        if (map) map.setOptions({ styles: [] });
+    } else {
+        body.setAttribute('data-theme', 'dark');
+        if (btn) btn.textContent = '☀️ Mode Clair';
+        if (map) map.setOptions({ styles: darkMapStyles });
+    }
+}
+
+// ============================================================================
+// SECTION 10 : INIT MAP & MENU
 // ============================================================================
 
 function initMap() {
@@ -707,15 +749,21 @@ function showView(viewName) {
 }
 
 function mettreAJourIsochrone() {
-    const sel = document.getElementById('isochrone-gare-select');
+    const input = document.getElementById('isochrone-gare-recherche');
     const cursor = document.getElementById('isochrone-curseur');
-    const idxSource = parseInt(sel?.value ?? '-1');
+    const idxSource = input ? trouverGare(input.value) : -1;
     const maxMinutes = parseInt(cursor?.value ?? '300');
     const label = document.getElementById('isochrone-label-temps');
     if (label) label.textContent = formatMinutes(maxMinutes);
-    if (isNaN(idxSource) || idxSource < 0 || !isochroneVisible) return;
+    if (idxSource === -1 || !isochroneVisible) return;
     afficherIsochrone(idxSource, maxMinutes);
 }
+
+// Un seul listener, dans DOMContentLoaded (évite le doublon de la version A)
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.addEventListener('click', toggleTheme);
+});
 
 window.initMap = initMap;
 window.loadApp = loadApp;
