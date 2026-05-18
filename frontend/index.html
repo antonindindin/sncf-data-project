@@ -85,10 +85,8 @@
 
                     <div class="isochrone-form">
                         <div class="isochrone-field">
-                            <label for="isochrone-gare-select">Gare de départ</label>
-                            <select id="isochrone-gare-select" onchange="mettreAJourIsochrone()">
-                                <option value="">— Choisir une gare —</option>
-                            </select>
+                            <label for="isochrone-gare-recherche">Gare de départ</label>
+                            <input type="text" id="isochrone-gare-recherche" list="liste-gares" autocomplete="off" placeholder="Ex : Montpellier Saint-Roch" onchange="mettreAJourIsochrone()">
                         </div>
                     </div>
 
@@ -166,6 +164,6 @@
     <script src="frequentation.js"></script>
     <script src="graphe.js"></script>
     <script src="script.js?v=11"></script>
-    <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap&libraries=visualization"></script>
+    <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAKrNmp_0-GgnP7A0cR4Zriii4zH_16rVc&callback=initMap&libraries=visualization,geometry"></script>
 </body>
 </html>
