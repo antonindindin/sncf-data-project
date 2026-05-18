@@ -106,19 +106,6 @@ function appliquerStyleReseau() {
 function selectionnerLigne(feature, latLng) {
     ligneSelectionnee = feature;
     appliquerStyleReseau();
-<<<<<<< HEAD
-    
-    const typeLigne = feature.getProperty('CATLIG') || 'Inconnu';
-    const idLigne = feature.getProperty('LIB_LIGNE') || feature.getProperty('CODE_LIGNE') || "Inconnue";
-    const estLGV = typeLigne === 'Ligne à grande vitesse';
-    
-    // --- NOUVEAU : Calcul dynamique de la VRAIE distance via Google Maps ---
-    let distanceMetres = 0;
-    let geometry = feature.getGeometry();
-    
-    if (geometry) {
-        // Selon comment la ligne est dessinée (un seul ou plusieurs segments)
-=======
 
     const typeLigne = feature.getProperty('CATLIG') || 'Inconnu';
     const idLigne = feature.getProperty('LIB_LIGNE') || feature.getProperty('CODE_LIGNE') || "Inconnue";
@@ -128,7 +115,6 @@ function selectionnerLigne(feature, latLng) {
     let distanceMetres = 0;
     const geometry = feature.getGeometry();
     if (geometry) {
->>>>>>> antoninbranche
         if (geometry.getType() === 'LineString') {
             distanceMetres = google.maps.geometry.spherical.computeLength(geometry.getArray());
         } else if (geometry.getType() === 'MultiLineString') {
@@ -137,26 +123,12 @@ function selectionnerLigne(feature, latLng) {
             });
         }
     }
-<<<<<<< HEAD
-    
-    // On convertit les mètres en kilomètres
-    let distanceKm = distanceMetres / 1000;
-    
-    // Au cas où le calcul échoue, on garde une sécurité
-    if (distanceKm === 0) distanceKm = 100; 
-
-    // Calcul du prix bout à bout avec la vraie distance
-    let ratioPrix = estLGV ? 0.18 : 0.12; 
-    let prixBoutABout = (distanceKm * ratioPrix).toFixed(2);
-    let ratioTexte = estLGV ? '0,18 €/km' : '0,10 à 0,15 €/km';
-=======
     let distanceKm = distanceMetres / 1000;
     if (distanceKm === 0) distanceKm = 100;
 
     const ratioPrix = estLGV ? 0.18 : 0.12;
     const prixBoutABout = (distanceKm * ratioPrix).toFixed(2);
     const ratioTexte = estLGV ? '0,18 €/km' : '0,10 à 0,15 €/km';
->>>>>>> antoninbranche
 
     infoWindow.setContent(`
         <div style="color:#333;font-family:sans-serif;padding:5px;min-width:220px;">
@@ -166,15 +138,10 @@ function selectionnerLigne(feature, latLng) {
             <p style="margin:4px 0;font-size:12px;"><strong>Service :</strong> ${estLGV ? 'TGV' : 'TER/IC'}</p>
             <p style="margin:4px 0;font-size:12px;"><strong>Vitesse :</strong> ${estLGV ? '~250 km/h' : '~90 km/h'}</p>
             <hr style="border:0;border-top:1px solid #eee;margin:8px 0;">
-<<<<<<< HEAD
-            
-=======
->>>>>>> antoninbranche
             <p style="margin:4px 0;font-size:13px;color:#004696;"><strong>Prix bout à bout :</strong> ~${prixBoutABout} €</p>
             <p style="margin:4px 0;font-size:13px;color:#004696;"><strong>Distance :</strong> ~${distanceKm.toFixed(0)} km</p>
             <p style="margin:4px 0;font-size:13px;color:#E20074;"><strong>Ratio :</strong> ${ratioTexte}</p>
         </div>`);
-        
     infoWindow.setPosition(latLng);
     infoWindow.open(map);
 }
@@ -733,7 +700,6 @@ function initMap() {
     reseauData.setMap(map);
     infoWindow = new google.maps.InfoWindow({ disableAutoPan: true });
     const legend = document.getElementById("map-legend");
-
     if (legend) { legend.style.display = "block"; map.controls[google.maps.ControlPosition.BOTTOM_LEFT].push(legend); }
     map.addListener('idle', function() { if (garesVisible) actualiserAffichageGares(); });
 }
@@ -756,7 +722,6 @@ function loadApp(appName) {
         else actualiserAffichageGares();
     }
     else if (appName === 'reseau') {
-
         reseauVisible = !reseauVisible; basculerBouton('reseau', reseauVisible);
         loadLGVLines(); if (!reseauVisible) deselectionnerLigne();
     }
@@ -786,24 +751,11 @@ function showView(viewName) {
 function mettreAJourIsochrone() {
     const input = document.getElementById('isochrone-gare-recherche');
     const cursor = document.getElementById('isochrone-curseur');
-<<<<<<< HEAD
-    
-    // On cherche l'ID de la gare tapée dans l'input
-=======
->>>>>>> antoninbranche
     const idxSource = input ? trouverGare(input.value) : -1;
     const maxMinutes = parseInt(cursor?.value ?? '300');
-    
     const label = document.getElementById('isochrone-label-temps');
     if (label) label.textContent = formatMinutes(maxMinutes);
-<<<<<<< HEAD
-    
-    // Si la gare n'est pas trouvée, on ne calcule rien
     if (idxSource === -1 || !isochroneVisible) return;
-    
-=======
-    if (idxSource === -1 || !isochroneVisible) return;
->>>>>>> antoninbranche
     afficherIsochrone(idxSource, maxMinutes);
 }
 
