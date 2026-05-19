@@ -857,6 +857,25 @@ body[data-theme="dark"] #btn-calculer-trajet:hover {
     .legend-dot { width: 10px; height: 10px; margin-right: 8px; }
     .legend-line { width: 20px; height: 3px; margin-right: 8px; }
     
+    /* Isochrone : champs pleine largeur */
+    .isochrone-field { max-width: 100%; }
+    .isochrone-description { font-size: 0.82rem; margin-bottom: 14px; }
+    .isochrone-curseur-marks { font-size: 0.65rem; }
+    
+    /* Touch targets : boutons et inputs plus grands */
+    .tarifs-field input,
+    .isochrone-field input,
+    .isochrone-field select {
+        font-size: 16px; /* empêche le zoom auto sur iOS */
+        padding: 12px;
+    }
+    
+    /* Résultats comparateur */
+    .resultat-chiffres { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .chiffre-valeur { font-size: 1.2rem; }
+    .segment-trajet { grid-template-columns: 50px 1fr; gap: 6px; font-size: 0.82rem; }
+    .segment-trajet-info { grid-column: 2; font-size: 0.78rem; }
+    
     .about-card { padding: 15px; }
 }
 
@@ -875,4 +894,3 @@ body[data-theme="dark"] #btn-calculer-trajet:hover {
     outline-offset: 2px;
     border-radius: 6px;
 }
-
