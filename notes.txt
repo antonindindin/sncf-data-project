@@ -1,2 +1,0 @@
-ajouter des données, regarder pour chaque ligne de train des stats
-lier avec la heatmap
