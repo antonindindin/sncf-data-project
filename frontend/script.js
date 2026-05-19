@@ -43,6 +43,8 @@ let isochroneResultat = null;
 let isochroneGareSource = -1;
 let isochronePolylines = [];
 let isochroneMarqueurs = [];
+let isochroneSegments = [];
+let isochroneDernierTemps = -1;
 
 let grandesGaresIdx = null;
 
@@ -475,83 +477,200 @@ function couleurIsochrone(minutes) {
 function afficherIsochrone(idxSource, maxMinutes) {
     if (!initialiserGraphe()) return;
 
-    if (isochroneGareSource !== idxSource || isochroneResultat === null) {
+    const nouvelleSource = (
+        isochroneGareSource !== idxSource ||
+        isochroneResultat === null
+    );
+
+    // =========================================================
+    // RECALCUL COMPLET UNIQUEMENT SI LA GARE CHANGE
+    // =========================================================
+    if (nouvelleSource) {
+
+        effacerIsochrone();
+
         const t0 = performance.now();
+
         isochroneResultat = dijkstraDepuisSource(idxSource, 900);
         isochroneGareSource = idxSource;
-        console.log(`✓ Dijkstra isochrone : ${(performance.now() - t0).toFixed(0)} ms`);
-    }
 
-    effacerIsochrone();
+        console.log(
+            `✓ Dijkstra isochrone : ${(performance.now() - t0).toFixed(0)} ms`
+        );
 
-    const { dist, pred, segPred } = isochroneResultat;
-    const aretesDessinees = new Set();
-    let nbGrandesGaresAtteintes = 0;
+        const { dist, pred, segPred } = isochroneResultat;
 
-    for (let i = 0; i < grapheSNCF.gares.length; i++) {
-        if (i === idxSource) continue;
-        const d = dist[i];
-        if (d > maxMinutes || d === Infinity) continue;
+        const aretesDessinees = new Set();
 
-        let u = i;
-        while (pred[u] !== -1) {
-            const ar = segPred[u];
-            const cle = Math.min(pred[u], u) + '_' + Math.max(pred[u], u);
-            if (!aretesDessinees.has(cle)) {
-                aretesDessinees.add(cle);
-                if (ar.trace && ar.trace.length >= 2) {
-                    const avgSegmentLength = ar.distance / (ar.trace.length - 1);
-                    if (avgSegmentLength <= 4.0) {
-                        let pts = ar.trace.map(c => [c[0], c[1]]);
-                        if (ar.sens === -1) pts = pts.slice().reverse();
-                        const segments = clipperEnFrance(pts);
-                        const couleur = couleurIsochrone(dist[u]);
-                        for (const seg of segments) {
-                            if (seg.length < 2) continue;
-                            isochronePolylines.push(new google.maps.Polyline({
-                                path: seg, geodesic: false,
-                                strokeColor: couleur,
-                                strokeOpacity: 0.85,
-                                strokeWeight: 4,
-                                zIndex: 50,
-                                map
-                            }));
+        // =====================================================
+        // CONSTRUCTION UNIQUE DES POLYLINES
+        // =====================================================
+        for (let i = 0; i < grapheSNCF.gares.length; i++) {
+
+            if (i === idxSource) continue;
+
+            if (dist[i] === Infinity) continue;
+
+            let u = i;
+
+            while (pred[u] !== -1) {
+
+                const ar = segPred[u];
+
+                const cle =
+                    Math.min(pred[u], u) +
+                    '_' +
+                    Math.max(pred[u], u);
+
+                if (!aretesDessinees.has(cle)) {
+
+                    aretesDessinees.add(cle);
+
+                    if (ar.trace && ar.trace.length >= 2) {
+
+                        const avgSegmentLength =
+                            ar.distance / (ar.trace.length - 1);
+
+                        if (avgSegmentLength <= 4.0) {
+
+                            let pts = ar.trace.map(c => [c[0], c[1]]);
+
+                            if (ar.sens === -1)
+                                pts = pts.slice().reverse();
+
+                            const segments = clipperEnFrance(pts);
+
+                            const couleur = couleurIsochrone(dist[u]);
+
+                            for (const seg of segments) {
+
+                                if (seg.length < 2) continue;
+
+                                const polyline = new google.maps.Polyline({
+                                    path: seg,
+                                    geodesic: false,
+                                    strokeColor: couleur,
+                                    strokeOpacity: 0.85,
+                                    strokeWeight: 4,
+                                    zIndex: 50,
+                                    map,
+                                    visible: false
+                                });
+
+                                isochroneSegments.push({
+                                    polyline,
+                                    temps: dist[u]
+                                });
+                            }
                         }
                     }
                 }
+
+                u = pred[u];
             }
-            u = pred[u];
         }
 
-        if (grandesGaresIdx && grandesGaresIdx.has(i)) {
-            nbGrandesGaresAtteintes++;
+        // =====================================================
+        // MARQUEUR SOURCE
+        // =====================================================
+        const gareSource = grapheSNCF.gares[idxSource];
+
+        const mkSource = new google.maps.Marker({
+            position: {
+                lat: gareSource.lat,
+                lng: gareSource.lon
+            },
+            map,
+            title: gareSource.nom + ' (départ)',
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 13,
+                fillColor: '#003570',
+                fillOpacity: 1,
+                strokeColor: '#FFFFFF',
+                strokeWeight: 2.5
+            },
+            zIndex: 300
+        });
+
+        mkSource.addListener('click', () => {
+            infoWindow.setContent(`
+                <div style="font-family:sans-serif;padding:6px 8px;">
+                    <strong style="color:#003570;">
+                        ${gareSource.nom}
+                    </strong><br>
+                    <span style="font-size:12px;color:#666;">
+                        Gare de départ
+                    </span>
+                </div>
+            `);
+
+            infoWindow.open(map, mkSource);
+        });
+
+        isochroneMarqueurs.push(mkSource);
+
+        console.log(
+            `✓ Isochrone préconstruite : ${isochroneSegments.length} segments`
+        );
+    }
+
+    // =========================================================
+    // MISE À JOUR ULTRA RAPIDE
+    // =========================================================
+
+    if (isochroneDernierTemps === maxMinutes)
+        return;
+
+    isochroneDernierTemps = maxMinutes;
+
+    let nbGrandesGaresAtteintes = 0;
+    let nbTotal = 0;
+
+    const { dist } = isochroneResultat;
+
+    for (let i = 0; i < dist.length; i++) {
+
+        if (i === idxSource) continue;
+
+        if (dist[i] <= maxMinutes && dist[i] !== Infinity) {
+
+            nbTotal++;
+
+            if (
+                grandesGaresIdx &&
+                grandesGaresIdx.has(i)
+            ) {
+                nbGrandesGaresAtteintes++;
+            }
         }
     }
 
-    const gareSource = grapheSNCF.gares[idxSource];
-    const mkSource = new google.maps.Marker({
-        position: { lat: gareSource.lat, lng: gareSource.lon },
-        map,
-        title: gareSource.nom + ' (départ)',
-        icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 13, fillColor: '#003570', fillOpacity: 1,
-            strokeColor: '#FFFFFF', strokeWeight: 2.5
-        },
-        zIndex: 300
-    });
-    mkSource.addListener('click', () => {
-        infoWindow.setContent(`<div style="font-family:sans-serif;padding:6px 8px;"><strong style="color:#003570;">${gareSource.nom}</strong><br><span style="font-size:12px;color:#666;">Gare de départ</span></div>`);
-        infoWindow.open(map, mkSource);
-    });
-    isochroneMarqueurs.push(mkSource);
+    // =========================================================
+    // SIMPLE SHOW/HIDE
+    // =========================================================
 
-    const stats = document.getElementById('isochrone-nb-gares');
+    for (const seg of isochroneSegments) {
+
+        seg.polyline.setVisible(
+            seg.temps <= maxMinutes
+        );
+    }
+
+    // =========================================================
+    // STATS
+    // =========================================================
+
+    const stats = document.getElementById(
+        'isochrone-nb-gares'
+    );
+
     if (stats) {
-        const nbTotal = [...Array(grapheSNCF.gares.length).keys()].filter(i => i !== idxSource && dist[i] <= maxMinutes && dist[i] !== Infinity).length;
-        stats.textContent = `${nbTotal} gares atteignables · ${nbGrandesGaresAtteintes} grandes gares`;
+
+        stats.textContent =
+            `${nbTotal} gares atteignables · ` +
+            `${nbGrandesGaresAtteintes} grandes gares`;
     }
-    console.log(`✓ Isochrone : ${isochronePolylines.length} segments, ${nbGrandesGaresAtteintes} grandes gares atteintes`);
 }
 
 function effacerIsochrone() {
