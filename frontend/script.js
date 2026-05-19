@@ -676,6 +676,9 @@ function afficherIsochrone(idxSource, maxMinutes) {
 function effacerIsochrone() {
     isochronePolylines.forEach(p => p.setMap(null)); isochronePolylines = [];
     isochroneMarqueurs.forEach(m => m.setMap(null)); isochroneMarqueurs = [];
+    // Nettoyer les segments préconstruits (chaque segment contient une polyline sur la carte)
+    isochroneSegments.forEach(s => s.polyline.setMap(null)); isochroneSegments = [];
+    isochroneDernierTemps = -1;
 }
 
 // ============================================================================
